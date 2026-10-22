@@ -1,0 +1,27 @@
+{
+  "repo": "owner/repo",
+  "source_repo": "owner/repo",
+  "source_selection": {
+    "method": "unresolved",
+    "reason": "REPLACE_WITH_OBSERVED_SOURCE_SELECTION_REASON",
+    "evidence": [],
+    "candidates": []
+  },
+  "ghsa_id": "GHSA-xxxx-xxxx-xxxx",
+  "source_updated_at": "REPLACE_WITH_ADVISORY_UPDATED_AT",
+  "reporter": null,
+  "verdict": "INCONCLUSIVE",
+  "code_finding": "INCONCLUSIVE",
+  "quality": "Medium",
+  "vuln_type": "unclassified",
+  "affected_component": "unspecified",
+  "quality_signals": {
+    "has_file_references": false,
+    "has_poc": false,
+    "has_line_numbers": false
+  },
+  "ref_sha": null,
+  "head_sha": null,
+  "patch_status": "could_not_determine",
+  "evidence": []
+}

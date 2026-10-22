@@ -1,0 +1,93 @@
+{
+  "repo": "kludex/starlette",
+  "source_repo": "kludex/starlette",
+  "source_selection": {
+    "method": "automatic",
+    "reason": "GitHub identifies Kludex/starlette as the non-fork Starlette project; its maintained README links to this source repository. The 0.26.1 package manifest names starlette and its StaticFiles implementation contains the exact reported commonprefix containment check.",
+    "evidence": [
+      "GET /repos/Kludex/starlette returned full_name Kludex/starlette, fork false, default_branch main, and the ASGI framework description.",
+      "GET /repos/Kludex/starlette/readme: Source Code links to https://github.com/Kludex/starlette and installation names starlette.",
+      "Kludex/starlette@8965f8849977b5752e415722a83aa00049f80ff3:pyproject.toml declares project.name = starlette; historical project URLs use encode/starlette.",
+      "Kludex/starlette@8965f8849977b5752e415722a83aa00049f80ff3:starlette/staticfiles.py:162-179 implements StaticFiles.lookup_path with os.path.commonprefix at line 172, matching the advisory."
+    ],
+    "candidates": [
+      {
+        "repo": "Kludex/starlette",
+        "result": "selected",
+        "reason": "Maintained project identity, package manifest, and exact affected source implementation agree. No conflicting source candidate required examination."
+      }
+    ]
+  },
+  "ghsa_id": "GHSA-v5gw-mw7f-84px",
+  "source_updated_at": "2025-08-26T10:32:10Z",
+  "advisory_state": "published",
+  "historical_assessment_authorized": true,
+  "reporter": null,
+  "verdict": "CONFIRMED",
+  "code_finding": "CONFIRMED",
+  "confidence": "High for the historical vulnerability and the specific current containment fix; static review only, without runtime reproduction.",
+  "quality": "High",
+  "vuln_type": "CWE-22",
+  "affected_component": "StaticFiles.lookup_path",
+  "claimed_severity": "low",
+  "severity_assessment": "accurate for the constrained confidentiality-only scenario; impact depends on the contents of matching-prefix files",
+  "quality_signals": {
+    "has_file_references": true,
+    "has_poc": true,
+    "has_line_numbers": true
+  },
+  "additional_quality_signals": {
+    "has_version_information": true,
+    "has_code_snippets": true
+  },
+  "affected_versions_reported": ">=0.13.5",
+  "patched_version_reported": "0.27.0",
+  "version_range_limitation": "The structured range omits an upper bound and therefore includes patched versions. Source confirms 0.26.1 affected and 0.27.0 fixed; the full lower-bound history was not examined.",
+  "affected_version_examined": "0.26.1",
+  "ref_sha": "8965f8849977b5752e415722a83aa00049f80ff3",
+  "head_sha": "dc20b216f065af3a487722141da9a29dcac388d1",
+  "patched_release_sha": "0c4b68ac4e179a788e38bac28f299dcad0f36e99",
+  "revision_repository": "kludex/starlette",
+  "patch_status": "patched",
+  "validation": "Read-only source inspection. No PoC, application, tests, dependency installation, or scanner executed.",
+  "cvss": {
+    "advisory_vector": "CVSS:3.0/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "advisory_score": 3.7,
+    "score_status": "Quoted from the advisory, not independently recalculated. No new numeric CVSS 3.1 score asserted.",
+    "candidate_v31_vector": "CVSS:3.1/AV:N/AC:H/PR:N/UI:N/S:U/C:L/I:N/A:N",
+    "rationale": "Network access, no required privileges or interaction for the supplied public mount, a matching-prefix readable sibling outside the static root, and limited confidentiality loss without demonstrated integrity or availability impact."
+  },
+  "duplicate_review": {
+    "local_similar_reports": 0,
+    "triage_inbox_reports": 0,
+    "structural_matches": [],
+    "semantic_duplicates": [],
+    "limitation": "Only local saved assessments and the accessible triage inbox were checked; published, closed, or inaccessible reports were not exhaustively searched."
+  },
+  "reporter_history": {
+    "reviewed_sample_size": 0,
+    "recommendation": "no history",
+    "reason": "No reporter-type credit identifies a GitHub login. The sole structured credit is a coordinator and must not be treated as the reporter."
+  },
+  "policy_findings": [
+    "Fetched inherited policy /repos/kludex/.github/contents/SECURITY.md requests reporting through the repository Security tab with a minimal reproducible example.",
+    "The advisory provides reproduction steps, source lines, and example application code. The policy states no supported-version list or relevant exclusion.",
+    "Reporting and source repositories are the same, so no cross-repository policy conflict was observed. The current policy does not establish what policy existed in 2023."
+  ],
+  "evidence": [
+    "https://github.com/Kludex/starlette/blob/8965f8849977b5752e415722a83aa00049f80ff3/starlette/routing.py#L386-L406 : Mount forwards the unmatched path, including ../ components, in the child scope.",
+    "https://github.com/Kludex/starlette/blob/8965f8849977b5752e415722a83aa00049f80ff3/starlette/staticfiles.py#L92-L146 : ASGI request path normalization, GET/HEAD restriction, file response, and optional HTML index handling.",
+    "https://github.com/Kludex/starlette/blob/8965f8849977b5752e415722a83aa00049f80ff3/starlette/staticfiles.py#L162-L179 : commonprefix accepts resolved sibling names beginning with the static root string; realpath does not restore component containment.",
+    "https://github.com/Kludex/starlette/blob/8965f8849977b5752e415722a83aa00049f80ff3/starlette/staticfiles.py#L182-L197 : accepted path is passed to FileResponse.",
+    "https://github.com/Kludex/starlette/blob/8965f8849977b5752e415722a83aa00049f80ff3/starlette/responses.py#L332-L362 : FileResponse opens the selected file in binary mode and sends its contents.",
+    "https://github.com/Kludex/starlette/blob/0c4b68ac4e179a788e38bac28f299dcad0f36e99/starlette/staticfiles.py#L162-L179 : release 0.27.0 uses component-aware commonpath.",
+    "https://github.com/Kludex/starlette/blob/0c4b68ac4e179a788e38bac28f299dcad0f36e99/tests/test_staticfiles.py#L520-L550 : regression test expects 404 for static1.txt and static_disallow/index.html; inspected, not executed.",
+    "https://github.com/Kludex/starlette/blob/dc20b216f065af3a487722141da9a29dcac388d1/starlette/staticfiles.py#L160-L179 : current HEAD rejects absolute paths and uses commonpath to enforce directory-component containment."
+  ],
+  "recommendations": [
+    "Retain the historical confirmed finding; no incoming-PVR accept/reject action applies to an already-published advisory.",
+    "Correct the affected range to exclude 0.27.0 and later for this issue after maintainer verification of the release history.",
+    "For affected deployments, upgrade to a currently supported fixed release and assess exposure of readable matching-prefix sibling files."
+  ],
+  "generated_at": "2026-10-21T06:42:33.898683+00:00"
+}
