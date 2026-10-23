@@ -8,7 +8,7 @@ import tempfile
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
-from unittest.mock import patch
+from unittest.mock import call, patch
 
 sys.path.insert(0, str(Path(__file__).resolve().parents[1] / "scripts"))
 
@@ -52,6 +52,13 @@ def assessment(repo=REPO, ghsa=GHSA):
         "evidence": [f"src/upload.py:2 at {SHA}"],
         "source_updated_at": "2026-09-01T00:00:00Z",
     }
+
+
+def github_response(value, link=None):
+    headers = "HTTP/2.0 200 OK\r\nContent-Type: application/json\r\n"
+    if link is not None:
+        headers += f"Link: {link}\r\n"
+    return subprocess.CompletedProcess([], 0, headers + "\r\n" + json.dumps(value), "")
 
 
 class ScoringTests(unittest.TestCase):
@@ -111,13 +118,21 @@ class IdentifierTests(unittest.TestCase):
 
 class GitHubReadTests(unittest.TestCase):
     def test_transport_is_get_only(self):
-        result = subprocess.CompletedProcess([], 0, json.dumps(advisory()), "")
+        result = github_response(advisory())
         with patch.object(pvr.subprocess, "run", return_value=result) as process:
             self.assertEqual(pvr.github_get("/repos/acme/widget/security-advisories/" + GHSA)["ghsa_id"], GHSA)
         command = process.call_args.args[0]
         self.assertEqual(command[command.index("--method") + 1], "GET")
         self.assertEqual(command[command.index("--hostname") + 1], "github.com")
+        self.assertIn("--include", command)
         self.assertFalse(process.call_args.kwargs.get("shell", False))
+
+    def test_invalid_http_and_json_responses_fail_explicitly(self):
+        for output in ("{}", "HTTP/2.0 200 OK\nMalformed header\n\n{}", "HTTP/2.0 200 OK\n\n{"):
+            with self.subTest(output=output):
+                result = subprocess.CompletedProcess([], 0, output, "")
+                with patch.object(pvr.subprocess, "run", return_value=result), self.assertRaises(ValueError):
+                    pvr.github_get("/repos/acme/widget")
 
     def test_api_errors_do_not_echo_credentials_or_response_bodies(self):
         result = subprocess.CompletedProcess([], 1, "", "secret-token (HTTP 403)")
@@ -127,12 +142,84 @@ class GitHubReadTests(unittest.TestCase):
         self.assertNotIn("secret-token", str(caught.exception))
 
     def test_inbox_paginates_and_preserves_descriptions_for_semantic_review(self):
-        pages = [[advisory()] * 100, [advisory(OTHER_GHSA)]]
-        with patch.object(pvr, "github_get", side_effect=pages):
+        link = '<https://api.github.com/repositories/123/security-advisories?after=cursor%2F%2B%3D>; rel="next"'
+        pages = [github_response([advisory()] * 100, link), github_response([advisory(OTHER_GHSA)])]
+        with patch.object(pvr.subprocess, "run", side_effect=pages) as process:
             result = pvr.list_advisories(REPO, "triage")
         self.assertEqual(len(result), 101)
         self.assertEqual(result[-1]["ghsa_id"], OTHER_GHSA)
         self.assertEqual(result[-1]["description"], "Bug in src/upload.py")
+        self.assertEqual([entry.args[0][-1] for entry in process.call_args_list], [
+            f"/repos/{REPO}/security-advisories?state=triage&per_page=100",
+            f"/repos/{REPO}/security-advisories?state=triage&per_page=100&after=cursor%2F%2B%3D",
+        ])
+
+    def test_inbox_follows_a_before_cursor_even_when_the_page_is_short(self):
+        link = '<https://api.github.com/repos/acme/widget/security-advisories?before=previous>; rel="next"'
+        with patch.object(pvr, "github_get_with_headers", side_effect=[
+            ([advisory()], {"link": link}), ([advisory(OTHER_GHSA)], {}),
+        ]) as api:
+            self.assertEqual(len(pvr.list_advisories(REPO)), 2)
+        self.assertEqual(api.call_args_list, [
+            call(f"/repos/{REPO}/security-advisories?state=triage&per_page=100"),
+            call(f"/repos/{REPO}/security-advisories?state=triage&per_page=100&before=previous"),
+        ])
+
+    def test_full_final_page_does_not_require_an_extra_request(self):
+        with patch.object(pvr, "github_get_with_headers", return_value=([advisory()] * 100, {})) as api:
+            self.assertEqual(len(pvr.list_advisories(REPO)), 100)
+        self.assertEqual(api.call_count, 1)
+
+    def test_inbox_accepts_exactly_5000_reports_only_when_pagination_is_complete(self):
+        for complete in (False, True):
+            pages = [
+                ([advisory()] * 100, {
+                    "link": f'<https://api.github.com/repositories/123/security-advisories?after={index}>; rel="next"',
+                } if index < 50 or not complete else {})
+                for index in range(1, 51)
+            ]
+            with self.subTest(complete=complete), patch.object(pvr, "github_get_with_headers", side_effect=pages) as api:
+                if complete:
+                    self.assertEqual(len(pvr.list_advisories(REPO)), 5000)
+                else:
+                    with self.assertRaisesRegex(ValueError, "50-page/5000-advisory limit"):
+                        pvr.list_advisories(REPO)
+                self.assertEqual(api.call_count, 50)
+
+    def test_inbox_rejects_repeated_cursors(self):
+        headers = {"link": '<https://api.github.com/repositories/123/security-advisories?after=repeated>; rel="next"'}
+        with patch.object(pvr, "github_get_with_headers", return_value=([advisory()], headers)) as api:
+            with self.assertRaisesRegex(ValueError, "repeated an advisory cursor"):
+                pvr.list_advisories(REPO)
+        self.assertEqual(api.call_count, 2)
+
+    def test_inbox_rejects_invalid_next_links_without_requesting_them(self):
+        for url in (
+            "https://example.com/?after=cursor",
+            "http://api.github.com/?after=cursor",
+            "https://api.github.com/?page=2",
+            "https://api.github.com/?after=one&after=two",
+            "https://api.github.com/?after=one&before=two",
+        ):
+            with self.subTest(url=url):
+                headers = {"link": f'<{url}>; rel="next"'}
+                with patch.object(pvr, "github_get_with_headers", return_value=([advisory()], headers)) as api:
+                    with self.assertRaisesRegex(ValueError, "invalid next-page advisory cursor"):
+                        pvr.list_advisories(REPO)
+                self.assertEqual(api.call_count, 1)
+
+    def test_later_inbox_access_error_is_not_a_partial_success(self):
+        headers = {"link": '<https://api.github.com/repositories/123/security-advisories?after=next>; rel="next"'}
+        with patch.object(pvr, "github_get_with_headers", side_effect=[
+            ([advisory()], headers), pvr.GitHubError(403),
+        ]):
+            with self.assertRaises(pvr.GitHubError):
+                pvr.list_advisories(REPO)
+
+    def test_inbox_requires_a_list_response(self):
+        with patch.object(pvr, "github_get_with_headers", return_value=({}, {})):
+            with self.assertRaisesRegex(ValueError, "Expected an advisory list"):
+                pvr.list_advisories(REPO)
 
     def test_permission_error_is_not_an_empty_security_policy(self):
         with patch.object(pvr, "github_get", side_effect=pvr.GitHubError(403)), self.assertRaises(pvr.GitHubError):
@@ -143,7 +230,29 @@ class GitHubReadTests(unittest.TestCase):
         with patch.object(pvr, "github_get", side_effect=[pvr.GitHubError(404), {"encoding": "base64", "content": content}]):
             result = pvr.security_policy(REPO)
         self.assertEqual(result["content"], "# Security policy")
-        self.assertIn(".github/SECURITY.md", result["path"])
+        self.assertEqual(result["path"], f"/repos/{REPO}/contents/SECURITY.md")
+
+    def test_github_policy_takes_precedence_when_root_policy_also_exists(self):
+        policies = {
+            f"/repos/{REPO}/contents/.github/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"GitHub policy").decode()},
+            f"/repos/{REPO}/contents/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"Root policy").decode()},
+        }
+        with patch.object(pvr, "github_get", side_effect=policies.__getitem__) as api:
+            result = pvr.security_policy(REPO)
+        self.assertEqual(result["content"], "GitHub policy")
+        api.assert_called_once_with(f"/repos/{REPO}/contents/.github/SECURITY.md")
+
+    def test_inherited_policy_is_checked_after_all_repository_locations(self):
+        content = {"encoding": "base64", "content": base64.b64encode(b"Inherited policy").decode()}
+        with patch.object(pvr, "github_get", side_effect=[pvr.GitHubError(404)] * 3 + [content]) as api:
+            result = pvr.security_policy(REPO)
+        self.assertEqual(api.call_args_list, [
+            call(f"/repos/{REPO}/contents/.github/SECURITY.md"),
+            call(f"/repos/{REPO}/contents/SECURITY.md"),
+            call(f"/repos/{REPO}/contents/docs/SECURITY.md"),
+            call("/repos/acme/.github/contents/SECURITY.md"),
+        ])
+        self.assertEqual(result["content"], "Inherited policy")
 
     def test_version_dereferences_annotated_tag(self):
         with patch.object(pvr, "github_get", side_effect=[
@@ -172,8 +281,62 @@ class GitHubReadTests(unittest.TestCase):
         with self.assertRaises(ValueError):
             pvr.read_source(REPO, "src/upload.py", "HEAD", 1, 10)
 
+    def test_source_citations_ignore_non_newline_separators(self):
+        first_line = "first\f\v\x1c\x1d\x1e\x85\u2028\u2029\rtail"
+        content = base64.b64encode(f"{first_line}\nsecond\n".encode()).decode()
+        with patch.object(pvr, "github_get", return_value={"encoding": "base64", "content": content}):
+            result = pvr.read_source(REPO, "src/upload.py", SHA, 1, 2)
+            selected = pvr.read_source(REPO, "src/upload.py", SHA, 2, 1)
+        self.assertEqual(result["total_lines"], 2)
+        self.assertEqual(result["content"], f"1: {first_line}\n2: second")
+        self.assertEqual(selected["content"], "2: second")
+
+    def test_source_handles_crlf_and_final_newlines_without_extra_lines(self):
+        for source, lines in (
+            ("first\nsecond", ["first", "second"]),
+            ("first\nsecond\n", ["first", "second"]),
+            ("first\r\nsecond\r\n", ["first", "second"]),
+            ("first\n\n", ["first", ""]),
+            ("\n", [""]),
+        ):
+            with self.subTest(source=source):
+                content = base64.b64encode(source.encode()).decode()
+                with patch.object(pvr, "github_get", return_value={"encoding": "base64", "content": content}):
+                    result = pvr.read_source(REPO, "src/upload.py", SHA)
+                self.assertEqual(result["total_lines"], len(lines))
+                self.assertEqual(result["content"], "\n".join(f"{number}: {line}" for number, line in enumerate(lines, 1)))
+
+    def test_empty_source_has_no_line_one(self):
+        with patch.object(pvr, "github_get", return_value={"encoding": "base64", "content": ""}):
+            with self.assertRaisesRegex(ValueError, "file length \\(0\\)"):
+                pvr.read_source(REPO, "src/upload.py", SHA)
+
 
 class DuplicateTests(unittest.TestCase):
+    def test_dense_clusters_do_not_repeatedly_reassign_existing_components(self):
+        class CountedIdentifier(str):
+            hashes = 0
+
+            def __hash__(self):
+                type(self).hashes += 1
+                return super().__hash__()
+
+        alphabet = "23456789cfghjmpqrvwx"
+        for size in (32, 64):
+            identifiers = [
+                f"GHSA-2345-6789-{alphabet[index // len(alphabet)]}{alphabet[index % len(alphabet)]}cf"
+                for index in range(size)
+            ]
+            validate = pvr.validate_ghsa
+            CountedIdentifier.hashes = 0
+            with self.subTest(size=size), patch.object(pvr, "validate_ghsa", side_effect=lambda value: CountedIdentifier(validate(value))):
+                result = pvr.compare_advisories([advisory(identifier) for identifier in identifiers])
+            self.assertEqual(result["clusters"], [sorted(identifiers)])
+            self.assertEqual(len(result["matches"]), size * (size - 1) // 2)
+            self.assertTrue(all(match["level"] == "strong" for match in result["matches"]))
+            self.assertEqual(result["singles"], [])
+            self.assertLess(CountedIdentifier.hashes, 8 * size * size)
+
     def test_strong_matches_form_clusters(self):
         result = pvr.compare_advisories([advisory(), advisory(OTHER_GHSA)])
         self.assertEqual(result["clusters"], [[GHSA, OTHER_GHSA]])
@@ -205,6 +368,51 @@ class ReportStoreTests(unittest.TestCase):
 
     def save(self, outcome=None):
         return self.store.record(REPO, GHSA, outcome or assessment(), "# Triage\nCode evidence.", "Thank you for the report.")
+
+    def test_failed_bundle_publication_preserves_existing_outputs_and_review(self):
+        directory = self.save()
+        self.store.review(REPO, GHSA)
+        originals = {name: (directory / name).read_bytes() for name in ("triage.md", "response.md", "assessment.json", "review.json")}
+        replace = pvr.os.replace
+        for failed_name in ("triage.md", "response.md", "assessment.json"):
+            def fail_publication(source, destination):
+                if Path(source).name == failed_name and Path(destination) == directory / failed_name:
+                    raise OSError("Publication failed")
+                return replace(source, destination)
+
+            with self.subTest(failed_name=failed_name), patch.object(pvr.os, "replace", side_effect=fail_publication):
+                with self.assertRaisesRegex(OSError, "Publication failed"):
+                    self.store.record(REPO, GHSA, {**assessment(), "verdict": "UNCONFIRMED"}, "Refuting evidence.", "Rejection draft.")
+            self.assertEqual({name: (directory / name).read_bytes() for name in originals}, originals)
+            self.assertTrue(self.store.records(REPO)[0]["reviewed"])
+            self.assertEqual(list(directory.glob(".record-*")), [])
+
+    def test_staging_failure_preserves_existing_bundle(self):
+        directory = self.save()
+        original_hash = self.store.bundle_hash(directory)
+        with patch.object(pvr.shutil, "copy2", side_effect=OSError("Backup failed")):
+            with self.assertRaisesRegex(OSError, "Backup failed"):
+                self.store.record(REPO, GHSA, assessment(), "New triage.", "New reply.")
+        self.assertEqual(self.store.bundle_hash(directory), original_hash)
+        self.assertEqual(list(directory.glob(".record-*")), [])
+
+    def test_incomplete_rollback_reports_and_preserves_recovery_files(self):
+        directory = self.save()
+        old_response = (directory / "response.md").read_bytes()
+        replace = pvr.os.replace
+
+        def fail_publication_and_one_restore(source, destination):
+            if Path(destination) == directory / "assessment.json" or Path(source).name == "response.md.previous":
+                raise OSError("Filesystem failure")
+            return replace(source, destination)
+
+        with patch.object(pvr.os, "replace", side_effect=fail_publication_and_one_restore):
+            with self.assertRaisesRegex(OSError, "rollback was incomplete for response.md.*Recovery files remain"):
+                self.store.record(REPO, GHSA, assessment(), "New triage.", "New reply.")
+        recovery = list(directory.glob(".record-*"))
+        self.assertEqual(len(recovery), 1)
+        self.assertEqual((recovery[0] / "response.md.previous").read_bytes(), old_response)
+        self.assertEqual((directory / "triage.md").read_text(encoding="utf-8"), "# Triage\nCode evidence.")
 
     def test_confirmed_code_finding_does_not_promote_security_verdict(self):
         directory = self.save({**assessment(), "verdict": "INCONCLUSIVE", "code_finding": "CONFIRMED"})
@@ -418,13 +626,36 @@ class RecordCommandTests(unittest.TestCase):
         self.assertFalse((self.directory / "assessment.json").exists())
 
     def test_record_retains_all_drafts_if_saving_the_assessment_fails(self):
-        with patch.object(pvr.ReportStore, "write_json", side_effect=OSError("Disk full")):
+        replace = pvr.os.replace
+
+        def fail_assessment_publication(source, destination):
+            if Path(destination) == self.directory / "assessment.json":
+                raise OSError("Disk full")
+            return replace(source, destination)
+
+        with patch.object(pvr.os, "replace", side_effect=fail_assessment_publication):
             with self.assertRaisesRegex(OSError, "Disk full"):
                 pvr.run_command(self.args)
         self.assertTrue(all(draft.exists() for draft in self.drafts))
-        self.assertTrue((self.directory / "triage.md").exists())
-        self.assertTrue((self.directory / "response.md").exists())
+        self.assertFalse((self.directory / "triage.md").exists())
+        self.assertFalse((self.directory / "response.md").exists())
         self.assertFalse((self.directory / "assessment.json").exists())
+
+    def test_record_retains_drafts_and_prior_bundle_if_replacement_fails(self):
+        self.store.record(REPO, GHSA, assessment(), "Original triage.", "Original reply.")
+        previous_hash = self.store.bundle_hash(self.directory)
+        replace = pvr.os.replace
+
+        def fail_assessment_publication(source, destination):
+            if Path(source).name == "assessment.json" and Path(destination) == self.directory / "assessment.json":
+                raise OSError("Replacement failed")
+            return replace(source, destination)
+
+        with patch.object(pvr.os, "replace", side_effect=fail_assessment_publication):
+            with self.assertRaisesRegex(OSError, "Replacement failed"):
+                pvr.run_command(self.args)
+        self.assertTrue(all(draft.exists() for draft in self.drafts))
+        self.assertEqual(self.store.bundle_hash(self.directory), previous_hash)
 
     def test_record_preserves_external_inputs_and_unused_bundle_drafts(self):
         external = Path(self.temporary.name) / "inputs"
@@ -483,8 +714,8 @@ class CommandLineTests(unittest.TestCase):
         for source_options, source_repo in [([], REPO), (["--source-repo", SOURCE_REPO], SOURCE_REPO)]:
             payloads = {
                 f"/repos/{REPO}/security-advisories/{GHSA}": advisory(),
-                f"/repos/{REPO}/contents/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"Reporting policy").decode()},
-                f"/repos/{SOURCE_REPO}/contents/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"Product policy").decode()},
+                f"/repos/{REPO}/contents/.github/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"Reporting policy").decode()},
+                f"/repos/{SOURCE_REPO}/contents/.github/SECURITY.md": {"encoding": "base64", "content": base64.b64encode(b"Product policy").decode()},
             }
             with self.subTest(source_repo=source_repo), tempfile.TemporaryDirectory() as temporary:
                 args = pvr.command_parser().parse_args(["--repo", REPO, *source_options, "--data-dir", temporary, "fetch", GHSA])
@@ -536,7 +767,7 @@ class CommandLineTests(unittest.TestCase):
             store.record(REPO, GHSA, assessment(), "Report", "Reply")
             signals = store.write_json(store.directory(REPO), "signals.json", {GHSA: dict.fromkeys(pvr.SIGNALS, False)})
             options = ["--repo", REPO, "--data-dir", temporary]
-            with patch.object(pvr, "github_get", return_value=[advisory()]):
+            with patch.object(pvr, "github_get_with_headers", return_value=([advisory()], {})):
                 pvr.run_command(pvr.command_parser().parse_args([*options, "--source-repo", SOURCE_REPO, "inbox"]))
             for override, expected_source, expected_skipped in [([], SOURCE_REPO, 0), (["--source-repo", REPO], REPO, 1)]:
                 with self.subTest(source_repo=expected_source):
@@ -572,9 +803,9 @@ class CommandLineTests(unittest.TestCase):
                 result = pvr.run_command(pvr.command_parser().parse_args([*options, "status", GHSA]))
             api.assert_called_once_with(f"/repos/{REPO}/security-advisories/{GHSA}")
             self.assertEqual(result["ghsa_id"], GHSA)
-            with patch.object(pvr, "github_get", return_value=[advisory()]) as api:
+            with patch.object(pvr, "github_get_with_headers", return_value=([advisory()], {})) as api:
                 result = pvr.run_command(pvr.command_parser().parse_args([*options, "inbox"]))
-            api.assert_called_once_with(f"/repos/{REPO}/security-advisories?state=triage&per_page=100&page=1")
+            api.assert_called_once_with(f"/repos/{REPO}/security-advisories?state=triage&per_page=100")
             inbox = json.loads(Path(result["path"]).read_text(encoding="utf-8"))
             self.assertEqual(inbox["repo"], REPO)
             self.assertEqual(inbox["advisories"][0]["ghsa_id"], GHSA)

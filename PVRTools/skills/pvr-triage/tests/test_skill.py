@@ -16,6 +16,19 @@ import pvr
 
 
 class SkillPackageTests(unittest.TestCase):
+    def test_workshop_guide_paths_match_bundled_layout(self):
+        root = SKILL_DIR.parents[2]
+        document = (root / "README.md").read_text(encoding="utf-8")
+        links = re.findall(r"\]\(\./([^\s)#]+)", document)
+        self.assertTrue(links)
+        for link in links:
+            with self.subTest(link=link):
+                self.assertTrue((root / link).exists())
+        self.assertIn("copilot skill add ./PVRTools/skills", document)
+        self.assertIn('PVR_REPORT_DIR="$PWD/PVRTools/examples/pvr-triage"', document)
+        self.assertIn("--data-dir ./PVRTools/examples/pvr-triage", document)
+        self.assertIn("PVRTools/examples/pvr-triage/<your-owner>/<your-repo>/", document)
+
     def test_frontmatter_matches_example_format_without_tool_preapproval(self):
         document = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")
         self.assertTrue(document.startswith("---\n"))

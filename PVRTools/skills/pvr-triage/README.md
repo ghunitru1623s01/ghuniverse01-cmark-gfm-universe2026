@@ -20,7 +20,7 @@ tokens to troubleshoot access.
 
 ## Install
 
-From the PVRTools repository root, with a current Copilot CLI:
+From the bundled `PVRTools/` directory, with a current Copilot CLI:
 
 ```bash
 copilot skill add ./skills/pvr-triage
@@ -128,10 +128,22 @@ repository context, and policies, plus `assessment.json`, `triage.md`, and
 `response.md`. Inbox ranking also produces repository-level `inbox.json`,
 `ranked.json`, and a Copilot-written `batch_queue.md`.
 
+The inbox reader follows GitHub's `Link`-header cursors, stopping only when no
+next page remains. It refuses incomplete results beyond 50 pages or 5,000
+advisories. Policy reads use the remote default branch and GitHub's precedence:
+`.github/SECURITY.md`, root `SECURITY.md`, then `docs/SECURITY.md`, with the
+owner's default community policy used only when none of those is found.
+
 During triage, `draft-assessment.json`, `draft-triage.md`, and `draft-response.md`
 are temporary inputs. `record` removes them from the bundle only after all three
 canonical outputs are saved; failures retain them for correction and retry.
 Inputs with other names or outside the bundle are not automatically removed.
+
+Before replacing a report bundle, `record` stages all three outputs and backs up
+existing files. A failed replacement rolls back the files already replaced,
+preserving the prior bundle and its review status. If a filesystem error also
+prevents rollback, the command reports the affected files and retains recovery
+backups at the reported path; restore those before reusing the bundle.
 
 Generated bundles are provisional. Only a maintainer's interactive `review`
 command creates `review.json`; only reviewed bundles affect reporter reputation,
@@ -146,7 +158,7 @@ of untrusted code; see [supervised validation](./references/validation.md).
 
 ## Python helper
 
-For direct helper use, run from the PVRTools root or use an absolute script path:
+For direct helper use, run from the `PVRTools/` directory or use an absolute script path:
 
 ```bash
 python skills/pvr-triage/scripts/pvr.py --help
