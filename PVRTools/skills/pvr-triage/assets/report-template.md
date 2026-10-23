@@ -29,7 +29,10 @@ is a clear match. Selecting a repository is not confirmation of a vulnerability.
 confidence. Separate missing evidence from disconfirming evidence. A confirmed
 code finding does not by itself establish a security violation. Static evidence
 can suffice; a PoC is not mandatory. Explicitly state if the shortcut policy
-skipped analysis.]
+skipped analysis. When evidence establishes a non-security issue, say "This is
+not a security vulnerability in the reported scenario" under the UNCONFIRMED
+security verdict, even if the code finding is CONFIRMED. Missing evidence remains
+INCONCLUSIVE, not proof of a non-security issue.]
 
 ## Code Verification
 
@@ -50,6 +53,9 @@ codes, reachability evidence, and environment limitations.]
 actual impact and preconditions. Give the justified vector and verified base
 score, or explicitly state that numeric scoring is unverified/not applicable.
 For inconclusive claims, distinguish a hypothetical scenario from observed risk.]
+
+[For an established non-security issue, state that security severity and CVSS
+are not applicable; do not assign a Low vulnerability rating to an ordinary bug.]
 
 ## Duplicate And Prior Reports
 
@@ -73,9 +79,13 @@ conflicts or unavailable policies.]
 
 [High / Medium / Low, with concrete accurate/missing/incorrect details.
 Known reporter login or unidentified; reviewed local sample size and label.
-Explain small-sample uncertainty. This is not a global reputation rating.]
+Explain small-sample uncertainty. This is not a global reputation rating.
+Report quality measures evidence quality, not whether a vulnerability exists.]
 
 ## Recommendations
 
 [One to three specific maintainer actions. No GitHub state has been changed and
-no response has been sent. Include unresolved questions and reply draft path.]
+no response has been sent. Include unresolved questions and reply draft path.
+For an established non-security bug or feature request, recommend a public issue
+only after a maintainer confirms disclosure is safe. Do not redirect unresolved
+security claims or copy private report details into a public issue.]

@@ -240,7 +240,15 @@ See [installation and command usage](./README.md) when setup is needed.
    security verdict in `verdict`. Separately label `code_finding` CONFIRMED,
    UNCONFIRMED, or INCONCLUSIVE for supported, refuted, or unresolved code
    behavior. A confirmed code finding or matching fix alone does not establish
-   the security verdict. State whether claimed severity is
+   the security verdict. When evidence establishes a non-security issue, lead
+   with "UNCONFIRMED - this is not a security vulnerability in the reported
+   scenario" and explain why. A code finding can still be CONFIRMED. Recommend
+   a public issue for a non-security bug or feature request only after a
+   maintainer confirms it is safe to disclose. Do not redirect unresolved
+   security claims to public issues: missing evidence remains INCONCLUSIVE.
+   A high-quality report or confirmed behavior is not a validated vulnerability.
+   For non-security issues, security severity and CVSS are not applicable, not
+   "Low". Otherwise, state whether claimed severity is
    accurate, overstated, or understated. Derive a CVSS 3.1 vector only when
    justified; verify a numeric score with a trusted calculator/library or label
    it unverified. Do not invent a score. Include duplicate evidence, policy

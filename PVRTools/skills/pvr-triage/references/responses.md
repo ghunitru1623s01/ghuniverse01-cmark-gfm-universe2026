@@ -87,17 +87,25 @@ Choose wording from the security verdict, not the code-finding status. Acknowled
 a verified code defect without implying that its claimed security impact is
 confirmed. Distinguish source verification from runtime reproduction.
 
+When evidence establishes a non-security issue, say so explicitly rather than
+calling it a valid vulnerability or asking for another PoC by default. Recommend
+the public issue tracker only for non-security bugs or feature requests after
+a maintainer confirms disclosure is safe. Never copy private report details into
+a public issue or post one automatically. Do not redirect unresolved security
+claims to public issues: missing evidence remains INCONCLUSIVE.
+
 **Confirmed:** "Thank you for reporting this. Our initial review found
 [attacker-controlled path] in [affected revision/path] crosses [security boundary]
 and causes [supported impact] under [necessary preconditions].
 [Verified current patch status, if known.] [An authorized next step, or a request
 to clarify a remaining detail.]"
 
-**Unconfirmed:** "Thank you for the report. At [revision], [path/lines] performs
-[specific mitigating behavior], which prevents [the reported security violation]
-under [reported conditions].
-Please provide [a concrete input or missing precondition] that demonstrates how
-the reported behavior bypasses that check."
+**Unconfirmed / non-security:** "Thank you for the report. At [revision],
+[path/lines] shows [specific behavior]. This is not a security vulnerability in
+the reported scenario because [specific evidence ruling out the security
+violation]. [When appropriate and cleared for disclosure: Please submit this
+non-security bug or feature request as a public issue in the project's issue
+tracker instead.]"
 
 **Inconclusive / shortcut:** "Our source review [supports specific code behavior /
 remains incomplete]. We cannot establish [the reported security scenario] because

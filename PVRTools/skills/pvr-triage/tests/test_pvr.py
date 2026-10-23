@@ -473,6 +473,15 @@ class ReportStoreTests(unittest.TestCase):
     def save(self, outcome=None):
         return self.store.record(REPO, GHSA, outcome or assessment(), "# Triage\nCode evidence.", "Thank you for the report.")
 
+    def test_refuted_security_scenario_preserves_supported_code_behavior(self):
+        directory = self.save({**assessment(), "verdict": "UNCONFIRMED", "code_finding": "CONFIRMED"})
+        stored = self.store.read_json(directory, "assessment.json")
+        self.assertEqual(stored["verdict"], "UNCONFIRMED")
+        self.assertEqual(stored["code_finding"], "CONFIRMED")
+        self.assertEqual(self.store.pending(REPO)[0]["verdict"], "UNCONFIRMED")
+        matches = self.store.similar(REPO, OTHER_GHSA, "path traversal", "upload")
+        self.assertEqual(matches[0]["verdict"], "UNCONFIRMED")
+
     def test_similar_normalizes_null_optional_metadata_without_inventing_matches(self):
         for changes, expected in (
             ({"vuln_type": None}, 1),

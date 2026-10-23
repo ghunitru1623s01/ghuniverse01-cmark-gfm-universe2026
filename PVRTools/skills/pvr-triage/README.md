@@ -72,6 +72,12 @@ Both use `CONFIRMED` (supported), `UNCONFIRMED` (refuted), or `INCONCLUSIVE`
 Static evidence can suffice; executing a proof of concept is not mandatory.
 Missing evidence is not grounds for automatic rejection.
 
+When evidence establishes a non-security issue, the UNCONFIRMED security verdict
+explicitly says it is not a security vulnerability in the reported scenario.
+The code finding may still be CONFIRMED. Recommend a public issue for a
+non-security bug or feature request only after a maintainer checks disclosure
+is safe; unresolved security claims stay private and INCONCLUSIVE.
+
 Legacy bundles without `code_finding` remain supported without migration or
 relabeling. Reassess older verdicts when needed rather than infer a security
 verdict from a code-finding status. See the [full workflow](./SKILL.md) and
