@@ -2,6 +2,7 @@ import base64
 import contextlib
 import io
 import json
+import os
 import subprocess
 import sys
 import tempfile
@@ -118,6 +119,37 @@ class IdentifierTests(unittest.TestCase):
 
 
 class GitHubReadTests(unittest.TestCase):
+    def test_utf8_stdout_and_stderr_are_decoded_under_a_non_utf8_locale(self):
+        description = "caf\u00e9 \u2014 \u6f22\u5b57"
+        response = ("HTTP/2.0 200 OK\r\n\r\n" + json.dumps({"description": description}, ensure_ascii=False)).encode("utf-8")
+        success = f"import sys; sys.stdout.buffer.write({response!r})"
+        failure = f"import sys; sys.stderr.buffer.write({(description + ' secret-token (HTTP 403)').encode('utf-8')!r}); sys.exit(1)"
+        driver = f"""import subprocess
+import sys
+sys.path.insert(0, {str(Path(pvr.__file__).parent)!r})
+import pvr
+original_run = subprocess.run
+emitter = {success!r}
+def fixture(command, **kwargs):
+    return original_run([sys.executable, "-c", emitter], **kwargs)
+pvr.subprocess.run = fixture
+assert pvr.github_get("/repos/acme/widget")["description"] == {ascii(description)}
+emitter = {failure!r}
+try:
+    pvr.github_get("/repos/acme/widget")
+except pvr.GitHubError as error:
+    assert error.status == 403
+    assert "secret-token" not in str(error)
+else:
+    raise AssertionError("Expected the sanitized GitHub error")
+"""
+        environment = {**os.environ, "LC_ALL": "C", "LANG": "C", "PYTHONUTF8": "0", "PYTHONCOERCECLOCALE": "0"}
+        result = subprocess.run(
+            [sys.executable, "-c", driver], capture_output=True, text=True,
+            encoding="utf-8", env=environment, timeout=30, check=False,
+        )
+        self.assertEqual(result.returncode, 0, result.stderr)
+
     def test_transport_is_get_only(self):
         result = github_response(advisory())
         with patch.object(pvr.subprocess, "run", return_value=result) as process:
@@ -126,6 +158,7 @@ class GitHubReadTests(unittest.TestCase):
         self.assertEqual(command[command.index("--method") + 1], "GET")
         self.assertEqual(command[command.index("--hostname") + 1], "github.com")
         self.assertIn("--include", command)
+        self.assertEqual(process.call_args.kwargs["encoding"], "utf-8")
         self.assertFalse(process.call_args.kwargs.get("shell", False))
 
     def test_invalid_http_and_json_responses_fail_explicitly(self):
@@ -439,6 +472,29 @@ class ReportStoreTests(unittest.TestCase):
 
     def save(self, outcome=None):
         return self.store.record(REPO, GHSA, outcome or assessment(), "# Triage\nCode evidence.", "Thank you for the report.")
+
+    def test_similar_normalizes_null_optional_metadata_without_inventing_matches(self):
+        for changes, expected in (
+            ({"vuln_type": None}, 1),
+            ({"affected_component": None}, 1),
+            ({"vuln_type": None, "affected_component": None}, 0),
+        ):
+            with self.subTest(changes=changes):
+                self.save({**assessment(), **changes})
+                matches = self.store.similar(REPO, OTHER_GHSA, "path traversal", "upload")
+                self.assertEqual(len(matches), expected)
+                self.assertEqual(self.store.similar(REPO, OTHER_GHSA, "null", "None"), [])
+                stored = self.store.read_json(self.store.directory(REPO, GHSA), "assessment.json")
+                for field in changes:
+                    self.assertIsNone(stored[field])
+
+    def test_similar_still_searches_report_text_when_optional_metadata_is_null(self):
+        self.store.record(
+            REPO, GHSA, {**assessment(), "vuln_type": None, "affected_component": None},
+            "# Triage\nUpload path traversal confirmed by source.", "Reply draft.",
+        )
+        matches = self.store.similar(REPO, OTHER_GHSA, "path traversal", "upload")
+        self.assertEqual([match["ghsa_id"] for match in matches], [GHSA])
 
     def test_failed_bundle_publication_preserves_existing_outputs_and_review(self):
         directory = self.save()

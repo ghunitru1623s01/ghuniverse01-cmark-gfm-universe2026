@@ -186,3 +186,7 @@ Use `COMMAND --help` for arguments, [scoring rules](./references/scoring.md)
 for ranking and duplicate logic, and [SKILL.md](./SKILL.md) for the workflow.
 The helper has no GitHub write commands, and Copilot must not simulate
 interactive maintainer review.
+
+GitHub subprocess output is decoded as UTF-8 regardless of the host locale.
+Saved-assessment similarity checks treat null optional vulnerability/component
+metadata as missing text, without rewriting the stored assessment.

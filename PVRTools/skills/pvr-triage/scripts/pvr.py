@@ -71,6 +71,7 @@ def github_get_with_headers(path: str) -> tuple[dict | list, dict[str, str]]:
         ["gh", "api", "--hostname", "github.com", "--method", "GET", "--include", path],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=60,
         check=False,
     )
@@ -477,7 +478,7 @@ class ReportStore:
                 continue
             directory = self.directory(repo, record["ghsa_id"])
             text = self.file(directory, "triage.md").read_text(encoding="utf-8")
-            text += " " + record.get("vuln_type", "") + " " + record.get("affected_component", "")
+            text += " " + (record.get("vuln_type") or "") + " " + (record.get("affected_component") or "")
             if any(term in text.casefold() for term in terms):
                 results.append({key: record[key] for key in ("ghsa_id", "source_repo", "verdict", "quality", "reviewed")})
         return results
