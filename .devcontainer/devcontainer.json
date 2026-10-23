@@ -14,5 +14,8 @@
         }
       }
     }
+  },
+  "remoteEnv": {
+    "COPILOT_GITHUB_TOKEN": "${containerEnv:GITHUB_TOKEN}"
   }
 }
