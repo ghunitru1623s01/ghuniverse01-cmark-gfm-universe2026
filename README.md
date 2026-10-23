@@ -29,6 +29,11 @@ Codespace-specific path is needed.
 1. Open this repository as a Codespace.
 2. Use Copilot CLI with skill support, and an
    authenticated GitHub CLI (`gh`). Python 3.10+ is needed for the advanced skill.
+   The [devcontainer configuration](./.devcontainer/devcontainer.json) forwards
+   an available `GITHUB_TOKEN` to `COPILOT_GITHUB_TOKEN`, allowing Copilot CLI to
+   use an eligible existing token without a separate sign-in. Rebuild/reopen the
+   Codespace after configuration changes; token permissions and Copilot access
+   are still required.
 3. Checkout the advisories under the Security Tab.
 4. Confirm that you can read both the advisory and the source.
 

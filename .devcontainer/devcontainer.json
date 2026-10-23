@@ -1,0 +1,6 @@
+{
+  "image": "mcr.microsoft.com/devcontainers/universal:2",
+  "remoteEnv": {
+    "COPILOT_GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+  }
+}
