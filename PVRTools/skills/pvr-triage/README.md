@@ -123,6 +123,11 @@ Data defaults to `~/.local/state/pvr-triage`, or
 `$XDG_STATE_HOME/pvr-triage` when set. Override it with `PVR_REPORT_DIR` or
 `--data-dir`. Keep private report data outside public checkouts.
 
+For a non-default output root, put `--data-dir /private/report-root` in the skill
+invocation itself. The skill must resolve that root once and pass it to every
+helper command; it must not replace an environment override with the default.
+An explicit helper `--data-dir` takes precedence over `PVR_REPORT_DIR`.
+
 Each `<data-root>/owner/repo/GHSA-xxxx-xxxx-xxxx/` bundle contains the advisory,
 repository context, and policies, plus `assessment.json`, `triage.md`, and
 `response.md`. Inbox ranking also produces repository-level `inbox.json`,
@@ -133,6 +138,13 @@ next page remains. It refuses incomplete results beyond 50 pages or 5,000
 advisories. Policy reads use the remote default branch and GitHub's precedence:
 `.github/SECURITY.md`, root `SECURITY.md`, then `docs/SECURITY.md`, with the
 owner's default community policy used only when none of those is found.
+The inherited `OWNER/.github` repository is checked in the same order:
+`.github/SECURITY.md`, root `SECURITY.md`, then `docs/SECURITY.md`.
+
+Duplicate comparison examines all pairs for complete structural clusters, but
+retains at most 1,000 detailed matches to bound memory growth. Both `compare`
+and `rank` disclose total matches, counts by strength, and omitted matches.
+Do not treat retained pair evidence as exhaustive.
 
 During triage, `draft-assessment.json`, `draft-triage.md`, and `draft-response.md`
 are temporary inputs. `record` removes them from the bundle only after all three

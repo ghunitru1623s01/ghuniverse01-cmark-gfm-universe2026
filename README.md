@@ -189,11 +189,10 @@ overwriting it.
    and saving reports beside the supplied examples:
 
    - **Copilot CLI:** Start a fresh session from the repository root with the
-     report directory set for that session:
+     report directory explicit in the skill invocation:
 
      ```bash
-     PVR_REPORT_DIR="$PWD/PVRTools/examples/pvr-triage" \
-       copilot -i '/pvr-triage triage YOUR-OWNER/YOUR-REPO GHSA-xxxx-xxxx-xxxx --source-repo YOUR-OWNER/YOUR-REPO'
+     copilot -i '/pvr-triage triage YOUR-OWNER/YOUR-REPO GHSA-xxxx-xxxx-xxxx --source-repo YOUR-OWNER/YOUR-REPO --data-dir ./PVRTools/examples/pvr-triage'
      ```
 
    - **VS Code:** In a fresh chat, supply the repository-relative data directory.
@@ -211,7 +210,9 @@ overwriting it.
    to understand the report. Open `policy.json` and verify that its path and
    content match your reviewed policy on the remote default branch, rather than
    an inherited, stale, or missing policy. If they differ, correct the remote
-   policy and refresh the snapshot before comparing assessments.
+   policy and rerun the complete advanced triage before comparing assessments.
+   Refreshing the snapshot with `fetch` alone does not regenerate the assessment,
+   report, or response under the corrected policy.
 
 These commands use [PVRTools/examples/pvr-triage](./PVRTools/examples/pvr-triage) as the output
 root. The helper keeps its repository/GHSA nesting, so this workshop's bundle
@@ -229,6 +230,12 @@ commit, push, or publish generated bundles. For real private reports, keep data
 outside the checkout: without an override, the helper uses
 `~/.local/state/pvr-triage` (respecting `XDG_STATE_HOME`). Preserve human edits
 on reruns.
+
+The output root also contains `inbox.json`, including full descriptions of other
+accessible triage reports. Generated owner/repository directories are ignored by
+Git to help prevent accidental commits; the supplied flat GHSA examples remain
+visible. This is not an access-control boundary, and force-adding files can
+bypass it. Keep real private inboxes outside the checkout.
 
 The advanced workflow still makes no GitHub changes or sends replies. Its
 outputs are provisional; only a maintainer can perform the interactive local

@@ -102,8 +102,12 @@ normalized summaries. Version strings are not evaluated as semver intervals.
 - Weak: any other structural overlap, including an identical normalized summary.
 - None: insufficient shared metadata, not proof of distinct vulnerabilities.
 
-Only strong edges join clusters, transitively. All moderate/weak matches remain
-visible, correcting a gap in the source branch's output. A transitive cluster
+Only strong edges join clusters, transitively. All pairs are examined for
+clustering and counted by strength, but only the first 1,000 matching pairs in
+input order retain detailed evidence. `total_matches`, `match_counts`,
+`omitted_matches`, and `matches_truncated` describe that limit in both `compare`
+and `rank` output. Always disclose omitted evidence; a retained sample is not
+an exhaustive duplicate review. A transitive cluster
 may contain different bugs, so review pairwise evidence. Semantic comparison is
 the model's separate, labelled judgment from actual descriptions and code paths.
 An advisory inbox can contain reports for different codebases; do not assume

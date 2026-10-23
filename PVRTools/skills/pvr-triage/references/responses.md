@@ -31,7 +31,7 @@ agent. There is intentionally no helper `accept`, `reject`, or `comment` command
    A maintainer may mark the local bundle reviewed by running the following
    in their own interactive terminal after inspecting all three files:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" review "$GHSA"
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" review "$GHSA"
    ```
    The command requires an exact typed confirmation and refuses noninteractive
    input. Do not run it for the maintainer, pipe approval into it, or edit

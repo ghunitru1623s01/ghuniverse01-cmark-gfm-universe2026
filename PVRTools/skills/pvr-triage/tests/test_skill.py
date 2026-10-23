@@ -17,17 +17,31 @@ import pvr
 
 class SkillPackageTests(unittest.TestCase):
     def test_workshop_guide_paths_match_bundled_layout(self):
-        root = SKILL_DIR.parents[2]
+        tools_root = SKILL_DIR.parents[1]
+        root = tools_root if (tools_root / "README.md").is_file() else tools_root.parent
+        prefix = "" if root == tools_root else f"{tools_root.name}/"
         document = (root / "README.md").read_text(encoding="utf-8")
         links = re.findall(r"\]\(\./([^\s)#]+)", document)
         self.assertTrue(links)
         for link in links:
             with self.subTest(link=link):
                 self.assertTrue((root / link).exists())
-        self.assertIn("copilot skill add ./PVRTools/skills", document)
-        self.assertIn('PVR_REPORT_DIR="$PWD/PVRTools/examples/pvr-triage"', document)
-        self.assertIn("--data-dir ./PVRTools/examples/pvr-triage", document)
-        self.assertIn("PVRTools/examples/pvr-triage/<your-owner>/<your-repo>/", document)
+        self.assertIn(f"copilot skill add ./{prefix}skills", document)
+        self.assertIn(f"--data-dir ./{prefix}examples/pvr-triage", document)
+        self.assertIn(f"{prefix}examples/pvr-triage/<your-owner>/<your-repo>/", document)
+        cli_commands = [line for line in document.splitlines() if "copilot -i " in line]
+        self.assertTrue(cli_commands)
+        for command in cli_commands:
+            self.assertIn(f"--data-dir ./{prefix}examples/pvr-triage", command)
+
+    def test_all_workflow_helper_examples_retain_the_selected_output_root(self):
+        for name in ("SKILL.md", "references/source-discovery.md", "references/responses.md"):
+            document = (SKILL_DIR / name).read_text(encoding="utf-8")
+            commands = re.findall(r'^\s*python "\$PVR_HELPER".*$', document, re.MULTILINE)
+            self.assertTrue(commands, name)
+            for command in commands:
+                with self.subTest(document=name, command=command):
+                    self.assertIn('--data-dir "$DATA_DIR"', command)
 
     def test_frontmatter_matches_example_format_without_tool_preapproval(self):
         document = (SKILL_DIR / "SKILL.md").read_text(encoding="utf-8")

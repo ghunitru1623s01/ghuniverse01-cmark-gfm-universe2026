@@ -5,6 +5,7 @@ import json
 import subprocess
 import sys
 import tempfile
+import tracemalloc
 import unittest
 from datetime import datetime, timezone
 from pathlib import Path
@@ -244,15 +245,33 @@ class GitHubReadTests(unittest.TestCase):
 
     def test_inherited_policy_is_checked_after_all_repository_locations(self):
         content = {"encoding": "base64", "content": base64.b64encode(b"Inherited policy").decode()}
-        with patch.object(pvr, "github_get", side_effect=[pvr.GitHubError(404)] * 3 + [content]) as api:
+        paths = [
+            f"/repos/{REPO}/contents/.github/SECURITY.md",
+            f"/repos/{REPO}/contents/SECURITY.md",
+            f"/repos/{REPO}/contents/docs/SECURITY.md",
+            "/repos/acme/.github/contents/.github/SECURITY.md",
+            "/repos/acme/.github/contents/SECURITY.md",
+            "/repos/acme/.github/contents/docs/SECURITY.md",
+        ]
+        for index in range(3, 6):
+            with self.subTest(location=paths[index]):
+                with patch.object(pvr, "github_get", side_effect=[pvr.GitHubError(404)] * index + [content]) as api:
+                    result = pvr.security_policy(REPO)
+                self.assertEqual(api.call_args_list, [call(path) for path in paths[:index + 1]])
+                self.assertEqual(result["path"], paths[index])
+                self.assertEqual(result["content"], "Inherited policy")
+
+    def test_missing_policy_checks_all_six_locations(self):
+        with patch.object(pvr, "github_get", side_effect=pvr.GitHubError(404)) as api:
             result = pvr.security_policy(REPO)
-        self.assertEqual(api.call_args_list, [
-            call(f"/repos/{REPO}/contents/.github/SECURITY.md"),
-            call(f"/repos/{REPO}/contents/SECURITY.md"),
-            call(f"/repos/{REPO}/contents/docs/SECURITY.md"),
-            call("/repos/acme/.github/contents/SECURITY.md"),
-        ])
-        self.assertEqual(result["content"], "Inherited policy")
+        self.assertEqual(api.call_count, 6)
+        self.assertIsNone(result["path"])
+        self.assertIn("No accessible policy", result["note"])
+
+    def test_inherited_policy_permission_error_is_not_a_missing_policy(self):
+        with patch.object(pvr, "github_get", side_effect=[pvr.GitHubError(404)] * 3 + [pvr.GitHubError(403)]):
+            with self.assertRaises(pvr.GitHubError):
+                pvr.security_policy(REPO)
 
     def test_version_dereferences_annotated_tag(self):
         with patch.object(pvr, "github_get", side_effect=[
@@ -311,8 +330,56 @@ class GitHubReadTests(unittest.TestCase):
             with self.assertRaisesRegex(ValueError, "file length \\(0\\)"):
                 pvr.read_source(REPO, "src/upload.py", SHA)
 
+    def test_directory_source_returns_a_clear_cli_error(self):
+        errors = io.StringIO()
+        output = io.StringIO()
+        with patch.object(pvr, "github_get", return_value=[{"type": "file", "path": "src/upload.py"}]):
+            with contextlib.redirect_stderr(errors), contextlib.redirect_stdout(output):
+                status = pvr.main(["--repo", REPO, "source", "--ref", SHA, "--path", "src"])
+        self.assertEqual(status, 1)
+        self.assertIn("PVR error:", errors.getvalue())
+        self.assertIn("not a directory", errors.getvalue())
+        self.assertIn("Use tree", errors.getvalue())
+        self.assertNotIn("Traceback", errors.getvalue())
+        self.assertEqual(output.getvalue(), "")
+
 
 class DuplicateTests(unittest.TestCase):
+    def test_pair_evidence_is_bounded_without_skipping_cluster_edges(self):
+        third = "GHSA-2345-6789-jmpq"
+        with patch.object(pvr, "MAX_RETAINED_MATCHES", 1):
+            result = pvr.compare_advisories([advisory(identifier) for identifier in (GHSA, OTHER_GHSA, third)])
+        self.assertEqual(result["clusters"], [sorted([GHSA, OTHER_GHSA, third])])
+        self.assertEqual(len(result["matches"]), 1)
+        self.assertEqual(result["total_matches"], 3)
+        self.assertEqual(result["match_counts"], {"strong": 3, "moderate": 0, "weak": 0})
+        self.assertEqual(result["omitted_matches"], 2)
+        self.assertTrue(result["matches_truncated"])
+        self.assertIn("omitted 2", result["note"])
+
+    def test_same_package_pair_evidence_stays_within_memory_bound(self):
+        alphabet = "23456789cfghjmpqrvwx"
+        reports = [
+            advisory(
+                f"GHSA-2345-6789-{alphabet[index // len(alphabet)]}{alphabet[index % len(alphabet)]}cf",
+                cwe="", description=f"Report {index}",
+            )
+            for index in range(256)
+        ]
+        tracemalloc.start()
+        try:
+            result = pvr.compare_advisories(reports)
+            _current, peak = tracemalloc.get_traced_memory()
+        finally:
+            tracemalloc.stop()
+        self.assertEqual(len(result["matches"]), pvr.MAX_RETAINED_MATCHES)
+        self.assertEqual(result["total_matches"], 32640)
+        self.assertEqual(result["omitted_matches"], 32640 - pvr.MAX_RETAINED_MATCHES)
+        self.assertEqual(result["match_counts"]["moderate"], 32640)
+        self.assertEqual(result["clusters"], [])
+        self.assertEqual(len(result["singles"]), 256)
+        self.assertLess(peak, 8 * 1024 * 1024)
+
     def test_dense_clusters_do_not_repeatedly_reassign_existing_components(self):
         class CountedIdentifier(str):
             hashes = 0
@@ -332,7 +399,9 @@ class DuplicateTests(unittest.TestCase):
             with self.subTest(size=size), patch.object(pvr, "validate_ghsa", side_effect=lambda value: CountedIdentifier(validate(value))):
                 result = pvr.compare_advisories([advisory(identifier) for identifier in identifiers])
             self.assertEqual(result["clusters"], [sorted(identifiers)])
-            self.assertEqual(len(result["matches"]), size * (size - 1) // 2)
+            total = size * (size - 1) // 2
+            self.assertEqual(len(result["matches"]), min(total, pvr.MAX_RETAINED_MATCHES))
+            self.assertEqual(result["total_matches"], total)
             self.assertTrue(all(match["level"] == "strong" for match in result["matches"]))
             self.assertEqual(result["singles"], [])
             self.assertLess(CountedIdentifier.hashes, 8 * size * size)
@@ -341,6 +410,8 @@ class DuplicateTests(unittest.TestCase):
         result = pvr.compare_advisories([advisory(), advisory(OTHER_GHSA)])
         self.assertEqual(result["clusters"], [[GHSA, OTHER_GHSA]])
         self.assertEqual(result["matches"][0]["level"], "strong")
+        self.assertFalse(result["matches_truncated"])
+        self.assertEqual(result["omitted_matches"], 0)
 
     def test_moderate_matches_are_visible_but_not_clustered(self):
         result = pvr.compare_advisories([
@@ -559,6 +630,17 @@ class ReportStoreTests(unittest.TestCase):
 
 
 class RankingTests(unittest.TestCase):
+    def test_rank_retains_complete_clusters_and_reports_omitted_pair_evidence(self):
+        third = "GHSA-2345-6789-jmpq"
+        identifiers = (GHSA, OTHER_GHSA, third)
+        signals = {identifier: dict.fromkeys(pvr.SIGNALS, True) for identifier in identifiers}
+        with patch.object(pvr, "MAX_RETAINED_MATCHES", 1):
+            result = pvr.rank_inbox([advisory(identifier) for identifier in identifiers], signals, [])
+        self.assertEqual(len(result["queue"]), 3)
+        self.assertEqual(result["duplicates"]["clusters"], [sorted(identifiers)])
+        self.assertEqual(result["duplicates"]["total_matches"], 3)
+        self.assertEqual(result["duplicates"]["omitted_matches"], 2)
+
     def test_changed_source_repo_is_not_skipped_as_an_existing_assessment(self):
         signals = {GHSA: dict.fromkeys(pvr.SIGNALS, False)}
         old = assessment()
@@ -710,6 +792,15 @@ class RecordCommandTests(unittest.TestCase):
 
 
 class CommandLineTests(unittest.TestCase):
+    def test_output_root_precedence_is_explicit_option_then_environment_then_default(self):
+        with patch.dict(pvr.os.environ, {"PVR_REPORT_DIR": "/tmp/pvr-env", "XDG_STATE_HOME": "/tmp/pvr-state"}):
+            command = ["--repo", REPO, "pending"]
+            self.assertEqual(pvr.command_parser().parse_args(command).data_dir, Path("/tmp/pvr-env"))
+            explicit = ["--repo", REPO, "--data-dir", "./examples/pvr-triage", "pending"]
+            self.assertEqual(pvr.command_parser().parse_args(explicit).data_dir, Path("./examples/pvr-triage"))
+            with patch.dict(pvr.os.environ, {"PVR_REPORT_DIR": ""}):
+                self.assertEqual(pvr.command_parser().parse_args(command).data_dir, Path("/tmp/pvr-state/pvr-triage"))
+
     def test_fetch_keeps_advisory_identity_and_both_policies(self):
         for source_options, source_repo in [([], REPO), (["--source-repo", SOURCE_REPO], SOURCE_REPO)]:
             payloads = {

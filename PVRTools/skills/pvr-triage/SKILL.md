@@ -69,6 +69,16 @@ the skill. In examples below, `REPO` is the validated advisory repository,
 verified automatic selection, and `BUNDLE` is the directory returned by
 `fetch` after discovery. Before selection, keep `SOURCE_REPO` unresolved.
 
+Resolve `DATA_DIR` once before the first helper call: use the user's explicit
+`--data-dir` first, otherwise the `PVR_REPORT_DIR` environment variable, otherwise
+`$XDG_STATE_HOME/pvr-triage` or `~/.local/state/pvr-triage`. Read only these named
+environment variables, never dump the environment. Expand home/relative paths
+against the session working directory and keep the resulting absolute path.
+Pass `--data-dir "$DATA_DIR"` on every helper invocation, including reads.
+Never substitute the default directory after finding an override, or reuse a
+bundle from a different output root. Confirm the returned `BUNDLE` is beneath
+the selected root.
+
 After selection, pass `--repo "$REPO" --source-repo "$SOURCE_REPO"` before
 the helper command. Keep that mapping consistent on every invocation, including
 later refreshes. Omit the source option for intake-only batch commands when
@@ -110,7 +120,7 @@ See [installation and command usage](./README.md) when setup is needed.
    do not create a guessed source mapping or change an existing assessment.
    Once selected, save the mapping and policies:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" fetch "$GHSA"
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" fetch "$GHSA"
    ```
    Read the returned `advisory.json`, `context.json`, and `policy.json`.
    `context.json` records `repo` and `source_repo` separately. The top-level
@@ -155,19 +165,23 @@ See [installation and command usage](./README.md) when setup is needed.
    issue matches require the same source repository; reporter history remains
    scoped to the reporting repository. Fetch that reporting repository's inbox:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" inbox
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" compare
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" inbox
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" compare
    ```
    Read other descriptions from the returned inbox file when deciding semantic
    duplicates. Strong structural matches form clusters; moderate/weak matches
    remain evidence only. Check root cause, code path, preconditions, and whether
    a report adds new information. Do not equate matching metadata with the same
    bug, especially if an inbox receives reports for multiple code repositories.
+   `compare` retains at most 1,000 detailed pair matches. Read `total_matches`,
+   `omitted_matches`, and `match_counts`; clusters still use every pair. Disclose
+   omitted evidence and inspect relevant descriptions rather than treating the
+   retained sample as exhaustive.
    See [scoring and duplicate rules](./references/scoring.md).
 
 4. **Apply the quality gate conservatively.**
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" score --severity high \
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" score --severity high \
      --signals "$BUNDLE/quality-signals.json"
    ```
    Replace severity with the reported value. Supply `--recommendation` from
@@ -186,8 +200,8 @@ See [installation and command usage](./README.md) when setup is needed.
    For `< 1.2.3`, do not inspect `1.2.3` as though it were affected. Resolve an
    exact version/tag or an explicitly identified ref:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" resolve --version 1.2.2
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" source --ref "$AFFECTED_SHA" \
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" resolve --version 1.2.2
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" source --ref "$AFFECTED_SHA" \
      --path src/example.py --start 1 --length 150
    ```
    Substitute actual paths and SHAs. If paths are missing, use
@@ -248,7 +262,7 @@ See [installation and command usage](./README.md) when setup is needed.
    repository-qualified source citations in `evidence`.
    Then run:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" --source-repo "$SOURCE_REPO" record "$GHSA" \
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$SOURCE_REPO" record "$GHSA" \
      --assessment "$BUNDLE/draft-assessment.json" \
      --report "$BUNDLE/draft-triage.md" --response "$BUNDLE/draft-response.md"
    ```
@@ -300,6 +314,8 @@ See [installation and command usage](./README.md) when setup is needed.
 4. Add clearly labelled semantic duplicate groups, preserving numeric scores
    and the distinction from structural evidence. Prefer reviewing the best
    evidence in a cluster; never automatically reject other reports.
+   Ranking reports the same detailed-pair limit as `compare`; include any
+   `omitted_matches` count and do not claim its retained evidence is exhaustive.
 5. Write `batch_queue.md` beside `ranked.json` with GHSA, age, claimed severity,
    quality signals, priority, duplicates, and suggested next action. Include
    counts and limitations. Ranking does not launch all deep triages or write

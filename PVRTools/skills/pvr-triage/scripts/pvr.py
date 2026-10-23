@@ -21,6 +21,7 @@ SIGNALS = ("has_file_references", "has_poc", "has_line_numbers")
 RECOMMENDATIONS = {"high trust", "normal", "no history", "treat with skepticism"}
 VERDICTS = {"CONFIRMED", "UNCONFIRMED", "INCONCLUSIVE"}
 QUALITIES = {"High", "Medium", "Low"}
+MAX_RETAINED_MATCHES = 1000
 
 
 def validate_repo(value: str) -> str:
@@ -126,7 +127,9 @@ def list_advisories(repo: str, state: str = "triage") -> list[dict]:
     raise ValueError("Inbox exceeds the 50-page/5000-advisory limit; refusing to return an incomplete queue.")
 
 
-def decode_content(result: dict) -> str:
+def decode_content(result: dict | list) -> str:
+    if not isinstance(result, dict):
+        raise ValueError("Expected a file response, not a directory. Use tree to locate a repository file.")
     if result.get("encoding") != "base64":
         raise ValueError("File is not available as inline base64 content; inspect it separately.")
     return base64.b64decode(result["content"]).decode("utf-8")
@@ -139,7 +142,9 @@ def security_policy(repo: str) -> dict:
         f"/repos/{repo}/contents/.github/SECURITY.md",
         f"/repos/{repo}/contents/SECURITY.md",
         f"/repos/{repo}/contents/docs/SECURITY.md",
+        f"/repos/{owner}/.github/contents/.github/SECURITY.md",
         f"/repos/{owner}/.github/contents/SECURITY.md",
+        f"/repos/{owner}/.github/contents/docs/SECURITY.md",
     ]
     for path in paths:
         try:
@@ -236,6 +241,7 @@ def compare_advisories(advisories: list[dict]) -> dict:
     fingerprints = {validate_ghsa(entry["ghsa_id"]): fingerprint(entry) for entry in advisories}
     components = {identifier: {identifier} for identifier in fingerprints}
     matches = []
+    match_counts = {"strong": 0, "moderate": 0, "weak": 0}
     for left_id, right_id in itertools.combinations(fingerprints, 2):
         left, right = fingerprints[left_id], fingerprints[right_id]
         overlap = {field: sorted(left[field] & right[field]) for field in left if left[field] & right[field]}
@@ -247,17 +253,30 @@ def compare_advisories(advisories: list[dict]) -> dict:
             level = "moderate"
         else:
             level = "weak"
-        matches.append({"advisories": [left_id, right_id], "level": level, "overlap": overlap})
+        match_counts[level] += 1
+        if len(matches) < MAX_RETAINED_MATCHES:
+            matches.append({"advisories": [left_id, right_id], "level": level, "overlap": overlap})
         if level == "strong" and components[left_id] is not components[right_id]:
             merged = components[left_id] | components[right_id]
             for identifier in merged:
                 components[identifier] = merged
     clusters = sorted({tuple(sorted(group)) for group in components.values() if len(group) > 1})
+    total_matches = sum(match_counts.values())
+    omitted_matches = total_matches - len(matches)
     return {
         "clusters": [list(group) for group in clusters],
         "matches": matches,
+        "match_counts": match_counts,
+        "total_matches": total_matches,
+        "omitted_matches": omitted_matches,
+        "matches_truncated": omitted_matches > 0,
         "singles": sorted(identifier for identifier, group in components.items() if len(group) == 1),
-        "note": "Structural heuristics only. Version strings are compared literally, not as overlapping ranges. No match does not prove reports are distinct.",
+        "note": (
+            "Structural heuristics only. Version strings are compared literally, not as overlapping ranges. "
+            "No match does not prove reports are distinct. "
+            f"Retained {len(matches)} of {total_matches} detailed matches; omitted {omitted_matches}. "
+            "Clusters and match counts include all examined pairs."
+        ),
     }
 
 
