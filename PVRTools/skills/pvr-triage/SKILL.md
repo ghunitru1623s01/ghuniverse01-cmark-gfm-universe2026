@@ -255,7 +255,8 @@ See [installation and command usage](./README.md) when setup is needed.
    findings, patch status, report quality, and small-sample reputation caveats.
    Include the selected source repository, whether it was explicit or automatic,
    and the concrete evidence and remaining limitations behind that selection.
-   Draft a plain-text reply under 200 words using the
+   End with an explicit maintainer recommendation based on the security verdict,
+   and draft a plain-text reply under 200 words using the
    [response guidance](./references/responses.md). Do not promise fixes,
    publication dates, credit arrangements, or acceptance without maintainer
    authorization. Do not expose reputation scores or other reporters' private

@@ -4,6 +4,23 @@ The helper and skill do not change GitHub data. `respond` and `respond-batch`
 prepare a reviewed handoff instead of reproducing the original write-back
 agent. There is intentionally no helper `accept`, `reject`, or `comment` command.
 
+## Recommended Disposition
+
+For incoming reports still in `triage`, give a provisional maintainer recommendation:
+
+| Security verdict | Recommendation |
+| --- | --- |
+| CONFIRMED | Recommend accepting for security handling if in scope and not already handled. |
+| UNCONFIRMED | Recommend rejecting the reported security scenario, citing disconfirming evidence at the affected revision. |
+| INCONCLUSIVE | Request the specific missing evidence; defer acceptance or rejection. |
+
+Use the security verdict, not `code_finding`: an incorrect code explanation can
+still reveal a real vulnerability. Handle duplicates under the existing report;
+retain historical validity when already fixed; distinguish policy-based routing
+for out-of-scope findings from technical validity. None alone makes a finding false.
+For established non-security expected behavior with no bug or feature request,
+explain or link documentation rather than suggesting a public issue.
+
 ## Before Preparing A State Change
 
 1. Confirm the advisory repository, GHSA, and action with the maintainer.
@@ -55,7 +72,7 @@ gh api --hostname github.com --method PATCH \
   /repos/OWNER/REPO/security-advisories/GHSA-ID -f state=closed
 ```
 
-Accepting does not publish an advisory, create a patch, or notify the reporter
+Accepting does not establish an agreed severity, publish an advisory, create a patch, or notify the reporter
 with the draft response. Never use `gh issue comment` for a GHSA. This skill does
 not automate advisory comments: the maintainer posts the reviewed draft in the
 advisory's discussion UI at

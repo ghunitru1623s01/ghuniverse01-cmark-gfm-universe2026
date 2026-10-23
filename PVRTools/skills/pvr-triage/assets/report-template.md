@@ -85,7 +85,8 @@ Report quality measures evidence quality, not whether a vulnerability exists.]
 ## Recommendations
 
 [One to three specific maintainer actions. No GitHub state has been changed and
-no response has been sent. Include unresolved questions and reply draft path.
+no response has been sent. Apply the [disposition rules](../references/responses.md#recommended-disposition).
+Include unresolved questions and reply draft path.
 For an established non-security bug or feature request, recommend a public issue
 only after a maintainer confirms disclosure is safe. Do not redirect unresolved
 security claims or copy private report details into a public issue.]
