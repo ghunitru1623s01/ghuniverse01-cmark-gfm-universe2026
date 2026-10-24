@@ -1,4 +1,0 @@
-{
-  "path": "/repos/kludex/.github/contents/SECURITY.md",
-  "content": "# Reporting Security Issues\n\nWe appreciate your efforts to responsibly disclose your findings, and will make every effort to\nacknowledge your contributions.\n\nTo responsibly report a security issue, please navigate to the \"Security\" tab for the repo and click\n\"Report a vulnerability\".\n\nBe sure to include as much detail as necessary in your report. As with reporting normal issues,\na minimal reproducible example will help the maintainers address the issue faster.\n\nThank you.\n"
-}
