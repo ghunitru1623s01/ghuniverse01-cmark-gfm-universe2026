@@ -20,7 +20,7 @@ tokens to troubleshoot access.
 
 ## Install
 
-From the PVRTools repository root, with a current Copilot CLI:
+From the bundled `PVRTools/` directory, with a current Copilot CLI:
 
 ```bash
 copilot skill add ./skills/pvr-triage
@@ -71,6 +71,12 @@ Both use `CONFIRMED` (supported), `UNCONFIRMED` (refuted), or `INCONCLUSIVE`
 (unresolved). Confirmed code behavior alone does not establish security impact.
 Static evidence can suffice; executing a proof of concept is not mandatory.
 Missing evidence is not grounds for automatic rejection.
+
+When evidence establishes a non-security issue, the UNCONFIRMED security verdict
+explicitly says it is not a security vulnerability in the reported scenario.
+The code finding may still be CONFIRMED. Recommend a public issue for a
+non-security bug or feature request only after a maintainer checks disclosure
+is safe; unresolved security claims stay private and INCONCLUSIVE.
 
 Legacy bundles without `code_finding` remain supported without migration or
 relabeling. Reassess older verdicts when needed rather than infer a security
@@ -123,15 +129,39 @@ Data defaults to `~/.local/state/pvr-triage`, or
 `$XDG_STATE_HOME/pvr-triage` when set. Override it with `PVR_REPORT_DIR` or
 `--data-dir`. Keep private report data outside public checkouts.
 
+For a non-default output root, put `--data-dir /private/report-root` in the skill
+invocation itself. The skill must resolve that root once and pass it to every
+helper command; it must not replace an environment override with the default.
+An explicit helper `--data-dir` takes precedence over `PVR_REPORT_DIR`.
+
 Each `<data-root>/owner/repo/GHSA-xxxx-xxxx-xxxx/` bundle contains the advisory,
 repository context, and policies, plus `assessment.json`, `triage.md`, and
 `response.md`. Inbox ranking also produces repository-level `inbox.json`,
 `ranked.json`, and a Copilot-written `batch_queue.md`.
 
+The inbox reader follows GitHub's `Link`-header cursors, stopping only when no
+next page remains. It refuses incomplete results beyond 50 pages or 5,000
+advisories. Policy reads use the remote default branch and GitHub's precedence:
+`.github/SECURITY.md`, root `SECURITY.md`, then `docs/SECURITY.md`, with the
+owner's default community policy used only when none of those is found.
+The inherited `OWNER/.github` repository is checked in the same order:
+`.github/SECURITY.md`, root `SECURITY.md`, then `docs/SECURITY.md`.
+
+Duplicate comparison examines all pairs for complete structural clusters, but
+retains at most 1,000 detailed matches to bound memory growth. Both `compare`
+and `rank` disclose total matches, counts by strength, and omitted matches.
+Do not treat retained pair evidence as exhaustive.
+
 During triage, `draft-assessment.json`, `draft-triage.md`, and `draft-response.md`
 are temporary inputs. `record` removes them from the bundle only after all three
 canonical outputs are saved; failures retain them for correction and retry.
 Inputs with other names or outside the bundle are not automatically removed.
+
+Before replacing a report bundle, `record` stages all three outputs and backs up
+existing files. A failed replacement rolls back the files already replaced,
+preserving the prior bundle and its review status. If a filesystem error also
+prevents rollback, the command reports the affected files and retains recovery
+backups at the reported path; restore those before reusing the bundle.
 
 Generated bundles are provisional. Only a maintainer's interactive `review`
 command creates `review.json`; only reviewed bundles affect reporter reputation,
@@ -146,7 +176,7 @@ of untrusted code; see [supervised validation](./references/validation.md).
 
 ## Python helper
 
-For direct helper use, run from the PVRTools root or use an absolute script path:
+For direct helper use, run from the `PVRTools/` directory or use an absolute script path:
 
 ```bash
 python skills/pvr-triage/scripts/pvr.py --help
@@ -162,3 +192,7 @@ Use `COMMAND --help` for arguments, [scoring rules](./references/scoring.md)
 for ranking and duplicate logic, and [SKILL.md](./SKILL.md) for the workflow.
 The helper has no GitHub write commands, and Copilot must not simulate
 interactive maintainer review.
+
+GitHub subprocess output is decoded as UTF-8 regardless of the host locale.
+Saved-assessment similarity checks treat null optional vulnerability/component
+metadata as missing text, without rewriting the stored assessment.

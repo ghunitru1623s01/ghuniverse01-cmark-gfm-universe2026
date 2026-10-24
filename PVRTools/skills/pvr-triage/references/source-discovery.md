@@ -42,7 +42,7 @@ for a maintained relationship to an upstream project:
 gh api --hostname github.com --method GET "/repos/$REPO" \
   --jq '{full_name, description, default_branch, fork, parent: .parent.full_name}'
 gh api --hostname github.com --method GET "/repos/$REPO/readme"
-python "$PVR_HELPER" --repo "$REPO" policy
+python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" policy
 ```
 
 The README response is JSON with base64 content; decode it with a standard
@@ -85,7 +85,7 @@ Set `CANDIDATE` to a validated owner/repo and check:
 ```bash
 gh api --hostname github.com --method GET "/repos/$CANDIDATE" \
   --jq '{full_name, description, default_branch, fork, parent: .parent.full_name}'
-python "$PVR_HELPER" --repo "$REPO" --source-repo "$CANDIDATE" resolve --ref HEAD
+python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" --source-repo "$CANDIDATE" resolve --ref HEAD
 ```
 
 Record GitHub's canonical `full_name`. Use `--source-repo "$CANDIDATE"` for

@@ -71,6 +71,12 @@ description: >
    Static evidence can suffice; running a PoC is not required. Separately label
    the code finding CONFIRMED, UNCONFIRMED, or INCONCLUSIVE for supported,
    refuted, or unresolved code behavior. Do not imply runtime reproduction.
+   When evidence establishes a non-security issue, lead with "UNCONFIRMED -
+   this is not a security vulnerability in the reported scenario" and explain
+   why. A code finding can still be CONFIRMED. Recommend a public issue for a
+   non-security bug or feature request only after a maintainer confirms it is
+   safe to disclose. Do not redirect unresolved security claims to public issues:
+   missing evidence remains INCONCLUSIVE.
 
 ## Output
 

@@ -40,3 +40,6 @@ alltests.md
 progit/
 bench/benchinput.md
 test/afl_results/
+
+# Generated report/inbox trees; keep the curated flat GHSA examples.
+/PVRTools/examples/pvr-triage/*/*/

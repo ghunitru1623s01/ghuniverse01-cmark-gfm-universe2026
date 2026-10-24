@@ -9,17 +9,19 @@ import itertools
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
 from datetime import datetime, timezone
 from pathlib import Path, PurePosixPath
-from urllib.parse import quote, urlencode
+from urllib.parse import parse_qs, quote, urlencode, urlsplit
 
 SIGNALS = ("has_file_references", "has_poc", "has_line_numbers")
 RECOMMENDATIONS = {"high trust", "normal", "no history", "treat with skepticism"}
 VERDICTS = {"CONFIRMED", "UNCONFIRMED", "INCONCLUSIVE"}
 QUALITIES = {"High", "Medium", "Low"}
+MAX_RETAINED_MATCHES = 1000
 
 
 def validate_repo(value: str) -> str:
@@ -62,42 +64,73 @@ class GitHubError(RuntimeError):
         super().__init__(f"GitHub read failed (HTTP {status or 'unknown'}). Check gh authentication and repository access.")
 
 
-def github_get(path: str) -> dict | list:
+def github_get_with_headers(path: str) -> tuple[dict | list, dict[str, str]]:
     if not path.startswith("/repos/"):
         raise ValueError("Only repository API reads are supported.")
     result = subprocess.run(
-        ["gh", "api", "--hostname", "github.com", "--method", "GET", path],
+        ["gh", "api", "--hostname", "github.com", "--method", "GET", "--include", path],
         capture_output=True,
         text=True,
+        encoding="utf-8",
         timeout=60,
         check=False,
     )
     if result.returncode:
         status = re.search(r"HTTP (\d{3})", result.stderr)
         raise GitHubError(int(status.group(1)) if status else None)
+    header_text, separator, body = result.stdout.replace("\r\n", "\n").partition("\n\n")
+    if not separator or not header_text.startswith("HTTP/"):
+        raise ValueError("GitHub returned an invalid HTTP response.")
+    headers = {}
+    for line in header_text.split("\n")[1:]:
+        name, separator, value = line.partition(":")
+        if not separator:
+            raise ValueError("GitHub returned an invalid HTTP response header.")
+        headers[name.lower()] = value.strip()
     try:
-        return json.loads(result.stdout)
+        return json.loads(body), headers
     except json.JSONDecodeError as error:
         raise ValueError("GitHub returned an invalid JSON response.") from error
+
+
+def github_get(path: str) -> dict | list:
+    return github_get_with_headers(path)[0]
 
 
 def list_advisories(repo: str, state: str = "triage") -> list[dict]:
     repo = validate_repo(repo)
     if state not in {"triage", "draft", "published", "closed", "withdrawn"}:
         raise ValueError("Unsupported advisory state.")
+    endpoint = f"/repos/{repo}/security-advisories"
+    query = {"state": state, "per_page": 100}
+    path = f"{endpoint}?{urlencode(query)}"
+    visited = set()
     advisories = []
-    for page in range(1, 51):
-        query = urlencode({"state": state, "per_page": 100, "page": page})
-        result = github_get(f"/repos/{repo}/security-advisories?{query}")
+    for _page in range(50):
+        if path in visited:
+            raise ValueError("GitHub repeated an advisory cursor; refusing to return an incomplete inbox.")
+        visited.add(path)
+        result, headers = github_get_with_headers(path)
         if not isinstance(result, list):
             raise ValueError("Expected an advisory list; no partial inbox will be used.")
         advisories.extend(result)
-        if len(result) < 100:
+        if len(advisories) > 5000:
+            break
+        next_link = re.search(r'<([^>]+)>\s*;\s*rel="next"', headers.get("link", ""))
+        if next_link is None:
             return advisories
-    raise ValueError("Inbox exceeds the 5000-advisory limit; refusing to return an incomplete queue.")
+        next_url = urlsplit(next_link[1])
+        parameters = parse_qs(next_url.query)
+        cursors = {name: values[0] for name, values in parameters.items() if name in {"after", "before"} and len(values) == 1}
+        if next_url.scheme != "https" or next_url.netloc != "api.github.com" or len(cursors) != 1:
+            raise ValueError("GitHub returned an invalid next-page advisory cursor.")
+        path = f"{endpoint}?{urlencode({**query, **cursors})}"
+    raise ValueError("Inbox exceeds the 50-page/5000-advisory limit; refusing to return an incomplete queue.")
 
 
-def decode_content(result: dict) -> str:
+def decode_content(result: dict | list) -> str:
+    if not isinstance(result, dict):
+        raise ValueError("Expected a file response, not a directory. Use tree to locate a repository file.")
     if result.get("encoding") != "base64":
         raise ValueError("File is not available as inline base64 content; inspect it separately.")
     return base64.b64decode(result["content"]).decode("utf-8")
@@ -107,10 +140,12 @@ def security_policy(repo: str) -> dict:
     repo = validate_repo(repo)
     owner = repo.split("/")[0]
     paths = [
-        f"/repos/{repo}/contents/SECURITY.md",
         f"/repos/{repo}/contents/.github/SECURITY.md",
+        f"/repos/{repo}/contents/SECURITY.md",
         f"/repos/{repo}/contents/docs/SECURITY.md",
+        f"/repos/{owner}/.github/contents/.github/SECURITY.md",
         f"/repos/{owner}/.github/contents/SECURITY.md",
+        f"/repos/{owner}/.github/contents/docs/SECURITY.md",
     ]
     for path in paths:
         try:
@@ -163,7 +198,9 @@ def read_source(repo: str, path: str, ref: str, start: int = 1, length: int = 15
     if start < 1 or not 1 <= length <= 500:
         raise ValueError("Start must be positive and length must be between 1 and 500.")
     result = github_get(f"/repos/{repo}/contents/{quote(path, safe='/')}?{urlencode({'ref': ref})}")
-    lines = decode_content(result).splitlines()
+    lines = decode_content(result).replace("\r\n", "\n").split("\n")
+    if lines[-1] == "":
+        lines.pop()
     if start > len(lines):
         raise ValueError(f"Start line exceeds file length ({len(lines)}).")
     return {
@@ -205,6 +242,7 @@ def compare_advisories(advisories: list[dict]) -> dict:
     fingerprints = {validate_ghsa(entry["ghsa_id"]): fingerprint(entry) for entry in advisories}
     components = {identifier: {identifier} for identifier in fingerprints}
     matches = []
+    match_counts = {"strong": 0, "moderate": 0, "weak": 0}
     for left_id, right_id in itertools.combinations(fingerprints, 2):
         left, right = fingerprints[left_id], fingerprints[right_id]
         overlap = {field: sorted(left[field] & right[field]) for field in left if left[field] & right[field]}
@@ -216,17 +254,30 @@ def compare_advisories(advisories: list[dict]) -> dict:
             level = "moderate"
         else:
             level = "weak"
-        matches.append({"advisories": [left_id, right_id], "level": level, "overlap": overlap})
-        if level == "strong":
+        match_counts[level] += 1
+        if len(matches) < MAX_RETAINED_MATCHES:
+            matches.append({"advisories": [left_id, right_id], "level": level, "overlap": overlap})
+        if level == "strong" and components[left_id] is not components[right_id]:
             merged = components[left_id] | components[right_id]
             for identifier in merged:
                 components[identifier] = merged
     clusters = sorted({tuple(sorted(group)) for group in components.values() if len(group) > 1})
+    total_matches = sum(match_counts.values())
+    omitted_matches = total_matches - len(matches)
     return {
         "clusters": [list(group) for group in clusters],
         "matches": matches,
+        "match_counts": match_counts,
+        "total_matches": total_matches,
+        "omitted_matches": omitted_matches,
+        "matches_truncated": omitted_matches > 0,
         "singles": sorted(identifier for identifier, group in components.items() if len(group) == 1),
-        "note": "Structural heuristics only. Version strings are compared literally, not as overlapping ranges. No match does not prove reports are distinct.",
+        "note": (
+            "Structural heuristics only. Version strings are compared literally, not as overlapping ranges. "
+            "No match does not prove reports are distinct. "
+            f"Retained {len(matches)} of {total_matches} detailed matches; omitted {omitted_matches}. "
+            "Clusters and match counts include all examined pairs."
+        ),
     }
 
 
@@ -279,6 +330,42 @@ class ReportStore:
 
     def write_json(self, directory: Path, name: str, value: dict | list) -> Path:
         return self.write(directory, name, json.dumps(value, indent=2) + "\n")
+
+    def write_bundle(self, directory: Path, contents: dict[str, str]) -> None:
+        paths = {name: self.file(directory, name) for name in contents}
+        staging = Path(tempfile.mkdtemp(prefix=".record-", dir=directory))
+        published = []
+        retain_backups = False
+        try:
+            for name, content in contents.items():
+                self.write(staging, name, content)
+                if paths[name].exists():
+                    shutil.copy2(paths[name], staging / f"{name}.previous")
+            try:
+                for name, path in paths.items():
+                    os.replace(staging / name, path)
+                    published.append(name)
+            except OSError as error:
+                rollback_errors = []
+                for name in reversed(published):
+                    previous = staging / f"{name}.previous"
+                    try:
+                        if previous.exists():
+                            os.replace(previous, paths[name])
+                        else:
+                            paths[name].unlink()
+                    except OSError:
+                        rollback_errors.append(name)
+                if rollback_errors:
+                    retain_backups = True
+                    raise OSError(
+                        f"Report save failed and rollback was incomplete for {', '.join(rollback_errors)}. "
+                        f"Recovery files remain at {staging}."
+                    ) from error
+                raise
+        finally:
+            if not retain_backups:
+                shutil.rmtree(staging)
 
     def read_json(self, directory: Path, name: str) -> dict | list:
         return json.loads(self.file(directory, name).read_text(encoding="utf-8"))
@@ -342,9 +429,11 @@ class ReportStore:
         outcome = {**assessment, "repo": repo, "source_repo": expected_source, "ghsa_id": ghsa, "reporter": reporter.lower() if reporter else None}
         outcome.pop("reviewed", None)
         outcome["generated_at"] = utc_now()
-        self.write(directory, "triage.md", report)
-        self.write(directory, "response.md", response)
-        self.write_json(directory, "assessment.json", outcome)
+        self.write_bundle(directory, {
+            "triage.md": report,
+            "response.md": response,
+            "assessment.json": json.dumps(outcome, indent=2) + "\n",
+        })
         return directory
 
     def bundle_hash(self, directory: Path) -> str:
@@ -389,7 +478,7 @@ class ReportStore:
                 continue
             directory = self.directory(repo, record["ghsa_id"])
             text = self.file(directory, "triage.md").read_text(encoding="utf-8")
-            text += " " + record.get("vuln_type", "") + " " + record.get("affected_component", "")
+            text += " " + (record.get("vuln_type") or "") + " " + (record.get("affected_component") or "")
             if any(term in text.casefold() for term in terms):
                 results.append({key: record[key] for key in ("ghsa_id", "source_repo", "verdict", "quality", "reviewed")})
         return results

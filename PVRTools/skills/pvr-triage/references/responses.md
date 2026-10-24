@@ -4,6 +4,23 @@ The helper and skill do not change GitHub data. `respond` and `respond-batch`
 prepare a reviewed handoff instead of reproducing the original write-back
 agent. There is intentionally no helper `accept`, `reject`, or `comment` command.
 
+## Recommended Disposition
+
+For incoming reports still in `triage`, give a provisional maintainer recommendation:
+
+| Security verdict | Recommendation |
+| --- | --- |
+| CONFIRMED | Recommend accepting for security handling if in scope and not already handled. |
+| UNCONFIRMED | Recommend rejecting the reported security scenario, citing disconfirming evidence at the affected revision. |
+| INCONCLUSIVE | Request the specific missing evidence; defer acceptance or rejection. |
+
+Use the security verdict, not `code_finding`: an incorrect code explanation can
+still reveal a real vulnerability. Handle duplicates under the existing report;
+retain historical validity when already fixed; distinguish policy-based routing
+for out-of-scope findings from technical validity. None alone makes a finding false.
+For established non-security expected behavior with no bug or feature request,
+explain or link documentation rather than suggesting a public issue.
+
 ## Before Preparing A State Change
 
 1. Confirm the advisory repository, GHSA, and action with the maintainer.
@@ -31,7 +48,7 @@ agent. There is intentionally no helper `accept`, `reject`, or `comment` command
    A maintainer may mark the local bundle reviewed by running the following
    in their own interactive terminal after inspecting all three files:
    ```bash
-   python "$PVR_HELPER" --repo "$REPO" review "$GHSA"
+   python "$PVR_HELPER" --data-dir "$DATA_DIR" --repo "$REPO" review "$GHSA"
    ```
    The command requires an exact typed confirmation and refuses noninteractive
    input. Do not run it for the maintainer, pipe approval into it, or edit
@@ -55,7 +72,7 @@ gh api --hostname github.com --method PATCH \
   /repos/OWNER/REPO/security-advisories/GHSA-ID -f state=closed
 ```
 
-Accepting does not publish an advisory, create a patch, or notify the reporter
+Accepting does not establish an agreed severity, publish an advisory, create a patch, or notify the reporter
 with the draft response. Never use `gh issue comment` for a GHSA. This skill does
 not automate advisory comments: the maintainer posts the reviewed draft in the
 advisory's discussion UI at
@@ -87,17 +104,25 @@ Choose wording from the security verdict, not the code-finding status. Acknowled
 a verified code defect without implying that its claimed security impact is
 confirmed. Distinguish source verification from runtime reproduction.
 
+When evidence establishes a non-security issue, say so explicitly rather than
+calling it a valid vulnerability or asking for another PoC by default. Recommend
+the public issue tracker only for non-security bugs or feature requests after
+a maintainer confirms disclosure is safe. Never copy private report details into
+a public issue or post one automatically. Do not redirect unresolved security
+claims to public issues: missing evidence remains INCONCLUSIVE.
+
 **Confirmed:** "Thank you for reporting this. Our initial review found
 [attacker-controlled path] in [affected revision/path] crosses [security boundary]
 and causes [supported impact] under [necessary preconditions].
 [Verified current patch status, if known.] [An authorized next step, or a request
 to clarify a remaining detail.]"
 
-**Unconfirmed:** "Thank you for the report. At [revision], [path/lines] performs
-[specific mitigating behavior], which prevents [the reported security violation]
-under [reported conditions].
-Please provide [a concrete input or missing precondition] that demonstrates how
-the reported behavior bypasses that check."
+**Unconfirmed / non-security:** "Thank you for the report. At [revision],
+[path/lines] shows [specific behavior]. This is not a security vulnerability in
+the reported scenario because [specific evidence ruling out the security
+violation]. [When appropriate and cleared for disclosure: Please submit this
+non-security bug or feature request as a public issue in the project's issue
+tracker instead.]"
 
 **Inconclusive / shortcut:** "Our source review [supports specific code behavior /
 remains incomplete]. We cannot establish [the reported security scenario] because
