@@ -1,0 +1,21 @@
+{
+  "name": "PVR Triage Workshop",
+  "customizations": {
+    "codespaces": {
+      "repositories": {
+        "ghunitru1623s01/REPONAME": {
+          "permissions": {
+            "contents": "write",
+            "issues": "read",
+            "pull-requests": "write",
+            "repository_advisories": "read",
+            "security_events": "read"
+          }
+        }
+      }
+    }
+  },
+  "remoteEnv": {
+    "COPILOT_GITHUB_TOKEN": "${localEnv:GITHUB_TOKEN}"
+  }
+}
