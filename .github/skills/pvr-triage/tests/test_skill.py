@@ -2,6 +2,7 @@ import contextlib
 import io
 import json
 import re
+import subprocess
 import sys
 import tempfile
 import unittest
@@ -16,23 +17,58 @@ import pvr
 
 
 class SkillPackageTests(unittest.TestCase):
-    def test_workshop_guide_paths_match_bundled_layout(self):
-        tools_root = SKILL_DIR.parents[1]
-        root = tools_root if (tools_root / "README.md").is_file() else tools_root.parent
-        prefix = "" if root == tools_root else f"{tools_root.name}/"
+    def test_workshop_guide_paths_match_deployed_layout(self):
+        root = next(parent for parent in SKILL_DIR.parents if (parent / "README.md").is_file())
         document = (root / "README.md").read_text(encoding="utf-8")
-        links = re.findall(r"\]\(\./([^\s)#]+)", document)
+        links = [
+            link for link in re.findall(r"\]\(([^\s)#]+)", document)
+            if not link.startswith(("https://", "http://"))
+        ]
         self.assertTrue(links)
         for link in links:
             with self.subTest(link=link):
                 self.assertTrue((root / link).exists())
-        self.assertIn(f"copilot skill add ./{prefix}skills", document)
-        self.assertIn(f"--data-dir ./{prefix}examples/pvr-triage", document)
-        self.assertIn(f"{prefix}examples/pvr-triage/<your-owner>/<your-repo>/", document)
+        registrations = re.findall(r"copilot skill add ([^\s`]+)", document)
+        self.assertTrue(registrations)
+        for path in registrations:
+            self.assertEqual((root / path).resolve(), SKILL_DIR.parent)
         cli_commands = [line for line in document.splitlines() if "copilot -i " in line]
         self.assertTrue(cli_commands)
+        output_roots = re.findall(r"--data-dir ([^\s'`]+)", document)
+        self.assertTrue(output_roots)
+        output_root = Path(output_roots[0])
+        self.assertEqual(output_root, Path("workshop-results/advanced"))
+        self.assertTrue(all(Path(path) == output_root for path in output_roots))
+        self.assertIn(f"{output_root.as_posix()}/<your-owner>/<your-repo>/", document)
+        self.assertIn("workshop-results/basic/GHSA-xxxx-xxxx-xxxx.md", document)
+        self.assertIn("/share file ./workshop-results/basic/", document)
         for command in cli_commands:
-            self.assertIn(f"--data-dir ./{prefix}examples/pvr-triage", command)
+            self.assertIn(f"--data-dir {output_roots[0]}", command)
+
+    def test_generated_report_tree_is_ignored(self):
+        root = next(parent for parent in SKILL_DIR.parents if (parent / "README.md").is_file())
+        document = (root / "README.md").read_text(encoding="utf-8")
+        output_root = Path(re.findall(r"--data-dir ([^\s'`]+)", document)[0])
+        results_root = root / "workshop-results"
+        self.assertEqual((results_root / ".gitignore").read_text(encoding="utf-8").splitlines(), ["*", "!.gitignore"])
+        paths = [
+            Path("workshop-results/basic/GHSA-2345-6789-cfgh.md"),
+            Path("workshop-results/basic/GHSA-2345-6789-cfgh-session.md"),
+            output_root / "example-owner/example-repo/inbox.json",
+            output_root / "example-owner/example-repo/GHSA-2345-6789-cfgh/assessment.json",
+        ]
+        for path in paths:
+            with self.subTest(path=path):
+                result = subprocess.run(
+                    ["git", "-C", str(root), "check-ignore", "--no-index", "--quiet", str(path)],
+                    capture_output=True, text=True, encoding="utf-8", check=False,
+                )
+                self.assertEqual(result.returncode, 0, result.stderr)
+        scaffold = subprocess.run(
+            ["git", "-C", str(root), "check-ignore", "--no-index", "--quiet", "workshop-results/.gitignore"],
+            capture_output=True, text=True, encoding="utf-8", check=False,
+        )
+        self.assertEqual(scaffold.returncode, 1, scaffold.stderr)
 
     def test_all_workflow_helper_examples_retain_the_selected_output_root(self):
         for name in ("SKILL.md", "references/source-discovery.md", "references/responses.md"):

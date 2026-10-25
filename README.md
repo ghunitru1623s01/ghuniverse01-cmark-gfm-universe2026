@@ -7,7 +7,9 @@ Join [Buzzin.Live](https://buzzin.live/) with facilitator code!
 This workshop takes place in your own repository. You will act as a
 maintainer assessing GitHub Private Vulnerability Reports (PVRs).
 
-Throughout this guide, replace `GHSA-xxxx-xxxx-xxxx` with one of your assigned advisory IDs.
+Throughout this guide, replace `REPONAME` with your workshop repository's name
+and `GHSA-xxxx-xxxx-xxxx` with one of your assigned advisory IDs. If your repository
+has a different owner, replace `ghunitru1623s01` as well.
 
 Work through the exercises in order:
 
@@ -35,6 +37,14 @@ Codespace-specific path is needed.
    are still required.
 3. Checkout the advisories under the Security Tab.
 4. Confirm that you can read both the advisory and the source.
+5. Prepare the result folders for the supplied workshop training data:
+
+   ```bash
+   mkdir -p workshop-results/basic workshop-results/advanced
+   ```
+
+   The [workshop-results](./workshop-results) folder excludes generated contents
+   from ordinary Git commits. Do not use it for real private reports.
 
 ### Triage safety boundaries
 
@@ -131,17 +141,40 @@ evidence can suffice; an unexecuted proof of concept is not grounds for rejectio
 1. Save the file and make sure Copilot discovers `my-pvr-triage`. In Copilot CLI,
    run `/skills reload` and `/skills list`. In VS Code, check the chat slash-command
    picker; reload the window if the new skill is not available.
-2. Start a fresh chat and invoke it with your assigned advisory:
+2. Start a fresh chat and invoke it with your assigned advisory using either
+   format (choose one):
+
+   **Advisory URL:**
+
+   ```text
+   /my-pvr-triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-xxxx-xxxx-xxxx
+   ```
+
+   **Or repository and GHSA ID:**
 
    ```text
    /my-pvr-triage ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx
    ```
 
-   Replace the GHSA placeholder with the assigned ID. You can supply the
-   individual advisory URL instead.
+   Replace the repository and GHSA placeholders. Use the individual advisory
+   URL, not the repository's general Security page.
 3. Review the answer, not just the verdict. Does it identify the revision, cite
    actual code, explain security impact, apply the policy, and acknowledge gaps?
    Does it avoid claiming runtime reproduction?
+4. Copy the final assessment into
+   `workshop-results/basic/GHSA-xxxx-xxxx-xxxx.md` using your editor. In Copilot
+   CLI, `/copy` copies the last response for pasting. The basic skill returns
+   text; saving it is your step, not permission for the triage agent to write files.
+
+   If you also want the full session, enter this **inside Copilot CLI after the
+   run**, not in your shell:
+
+   ```text
+   /share file ./workshop-results/basic/GHSA-xxxx-xxxx-xxxx-session.md
+   ```
+
+   Replace the GHSA placeholder in both filenames. A session export includes
+   commands and tool output; use the final assessment for the report comparison.
 
 ### If you need a reference
 
@@ -164,9 +197,22 @@ To run it directly, make the supplied skills available for your client:
   This registers both supplied skills in your CLI settings. Keep the original
   directory in place; its scripts, references, and templates remain there.
 
-Reload discovery as above and use `/pvr-triage-workshop` with the same repository
-and GHSA arguments. Keep your own skill under its distinct name rather than
-overwriting it.
+Reload discovery as above and choose either format:
+
+**Advisory URL:**
+
+```text
+/pvr-triage-workshop https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-xxxx-xxxx-xxxx
+```
+
+**Or repository and GHSA ID:**
+
+```text
+/pvr-triage-workshop ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx
+```
+
+Keep your own skill under its distinct name rather than overwriting it. Save the
+answer in `workshop-results/basic/` as described above.
 
 
 ## 4. Discuss/Contemplate: What additional features might your skill implement to help with triage?
@@ -183,24 +229,41 @@ overwriting it.
 3. Reload discovery as before and verify that `pvr-triage` is available. Start
    a fresh chat so the comparison does not depend on the previous answer.
 4. Run the same advisory, explicitly pinning this workshop's code repository
-   and saving reports beside the supplied examples:
+   and selecting the generated-report directory:
 
    - **Copilot CLI:** Start a fresh session from the repository root with the
-     report directory explicit in the skill invocation:
+     report directory explicit in the skill invocation. Choose either format:
+
+     **Advisory URL:**
 
      ```bash
-     copilot -i '/pvr-triage triage ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./PVRTools/examples/pvr-triage'
+     copilot -i '/pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced'
+     ```
+
+     **Or repository and GHSA ID:**
+
+     ```bash
+     copilot -i '/pvr-triage triage ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced'
      ```
 
    - **VS Code:** In a fresh chat, supply the repository-relative data directory.
-     Use it for every helper command in this run:
+     Use it for every helper command in this run. Choose either format:
+
+     **Advisory URL:**
 
      ```text
-     /pvr-triage triage ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./PVRTools/examples/pvr-triage
+     /pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
      ```
 
-   Replace both repository placeholders with your repository and the GHSA
-   placeholder with your assigned ID. The explicit source keeps the exercise
+     **Or repository and GHSA ID:**
+
+     ```text
+     /pvr-triage triage ghunitru1623s01/REPONAME GHSA-xxxx-xxxx-xxxx --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
+     ```
+
+   The URL replaces the repository and GHSA arguments, not the output-directory
+   or source-repository options. Replace all repository placeholders with your
+   repository and the GHSA placeholder with your assigned ID. The explicit source keeps the exercise
    focused on your repository rather than another upstream repository.
 5. Inspect the returned paths for `triage.md`, `assessment.json`, and
    `response.md`. Use the [report-category guide](.github/skills/pvr-triage/README.md#triage-report-categories)
@@ -211,15 +274,24 @@ overwriting it.
    Refreshing the snapshot with `fetch` alone does not regenerate the assessment,
    report, or response under the corrected policy.
 
-These commands use [PVRTools/examples/pvr-triage](./PVRTools/examples/pvr-triage) as the output
-root. The helper keeps its repository/GHSA nesting, so this workshop's bundle
-will appear at the following path, using lowercase owner and repository names:
+These commands use `workshop-results/advanced` as the output root. The helper
+creates repository/GHSA folders as needed, using lowercase owner and repository
+names. Your basic answer and advanced bundle are kept separately:
 
 ```text
-PVRTools/examples/pvr-triage/ghunitru1623s01/REPONAME/GHSA-xxxx-xxxx-xxxx/
-  assessment.json
-  triage.md
-  response.md
+workshop-results/
+  .gitignore
+  basic/
+    GHSA-xxxx-xxxx-xxxx.md
+  advanced/
+    <your-owner>/
+      <your-repo>/
+        inbox.json
+        GHSA-xxxx-xxxx-xxxx/
+          triage.md
+          assessment.json
+          response.md
+          ...supporting snapshots
 ```
 
 Use this in-checkout location only for the supplied workshop data. Do not
@@ -228,11 +300,13 @@ outside the checkout: without an override, the helper uses
 `~/.local/state/pvr-triage` (respecting `XDG_STATE_HOME`). Preserve human edits
 on reruns.
 
-The output root also contains `inbox.json`, including full descriptions of other
-accessible triage reports. Generated owner/repository directories are ignored by
-Git to help prevent accidental commits; the supplied flat GHSA examples remain
-visible. This is not an access-control boundary, and force-adding files can
-bypass it. Keep real private inboxes outside the checkout.
+The advanced output also contains `inbox.json`, including full descriptions of
+other accessible triage reports. All contents of `workshop-results/` except its
+ignore file are excluded from ordinary Git commits, including basic answers and
+session exports. This is not an access-control boundary, and force-adding files
+can bypass it. Keep real private inboxes outside the checkout. Preserve the first
+run separately if you want to compare reruns: a successful rerun to the same
+advisory folder replaces its previous results.
 
 The advanced workflow still makes no GitHub changes or sends replies. Its
 outputs are provisional; only a maintainer can perform the interactive local
@@ -240,7 +314,8 @@ review. Do not ask Copilot to approve its own assessment.
 
 ## 5. Compare and discuss
 
-Compare your skill's answer with the advanced report:
+Compare `workshop-results/basic/GHSA-xxxx-xxxx-xxxx.md` with
+`workshop-results/advanced/<your-owner>/<your-repo>/GHSA-xxxx-xxxx-xxxx/triage.md`:
 
 - Did both examine the same affected revision and security scenario?
 - Did they separate code behavior from security impact and explain uncertainty?
