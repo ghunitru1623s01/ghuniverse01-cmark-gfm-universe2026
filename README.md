@@ -7,9 +7,28 @@ Join [Buzzin.Live](https://buzzin.live/) with facilitator code!
 This workshop takes place in your own repository. You will act as a
 maintainer assessing GitHub Private Vulnerability Reports (PVRs).
 
-Throughout this guide, replace `REPONAME` with your workshop repository's name
-and `GHSA-xxxx-xxxx-xxxx` with one of your assigned advisory IDs. If your repository
-has a different owner, replace `ghunitru1623s01` as well.
+Throughout this guide, replace `GHSA-xxxx-xxxx-xxxx` with one of your assigned advisory IDs.
+
+# Workspace setup
+
+## Start a Codespace
+
+* Click the "Code" button on this repo.
+* Select the "Codespaces" tab.
+* Click "Create codespace on main".
+* Answer "yes" whenever asked if you trust the files in the folder.
+
+### Setup copilot
+
+* Type `copilot` in the terminal window to start a CLI session.
+* Type `/skills list` to check that it's working.
+* You can click the `+` button to start more terminals.
+
+## View security tab
+
+Open https://github.com/ghunitru1623s01/REPONAME/security in a separate browser tab.
+
+
 
 Work through the exercises in order:
 
