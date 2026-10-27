@@ -102,8 +102,6 @@ evidence can suffice; an unexecuted proof of concept is not grounds for rejectio
    /my-pvr-triage ghunitru1623s01/REPONAME GHSA-quadratic
    ```
 
-   Replace the repository and GHSA placeholders. Use the individual advisory
-   URL, not the repository's general Security page.
 3. Review the answer, not just the verdict. Does it identify the revision, cite
    actual code, explain security impact, and acknowledge gaps?
    Does it avoid claiming runtime reproduction?
@@ -119,7 +117,7 @@ evidence can suffice; an unexecuted proof of concept is not grounds for rejectio
    /share file ./workshop-results/basic/GHSA-quadratic-session.md
    ```
 
-   Replace the GHSA placeholder in both filenames. A session export includes
+   A session export includes
    commands and tool output; use the final assessment for the report comparison.
 
 ### If you need a reference
