@@ -27,10 +27,10 @@ comes later.
 
 # Security Basics
 
-* Open https://github.com/ghunitru1623s01/REPONAME/security
+* Open https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security
 * Enable PVR
 * View open advisories
-* Accept the [typo report](https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-inteprereted)
+* Accept the [typo report](https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security/advisories/GHSA-vc4v-gmpc-9gfg)
 * Request a CVE
 * Create a private fork
 * Edit the file to create a PR
@@ -93,20 +93,20 @@ evidence can suffice; an unexecuted proof of concept is not grounds for rejectio
    **Advisory URL:**
 
    ```text
-   /my-pvr-triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic
+   /my-pvr-triage https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security/advisories/GHSA-rh83-p44w-f327
    ```
 
    **Or repository and GHSA ID:**
 
    ```text
-   /my-pvr-triage ghunitru1623s01/REPONAME GHSA-quadratic
+   /my-pvr-triage ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 GHSA-rh83-p44w-f327
    ```
 
 3. Review the answer, not just the verdict. Does it identify the revision, cite
    actual code, explain security impact, and acknowledge gaps?
    Does it avoid claiming runtime reproduction?
 4. Copy the final assessment into
-   `workshop-results/basic/GHSA-quadratic.md` using your editor. In Copilot
+   `workshop-results/basic/GHSA-rh83-p44w-f327.md` using your editor. In Copilot
    CLI, `/copy` copies the last response for pasting. The basic skill returns
    text; saving it is your step, not permission for the triage agent to write files.
 
@@ -114,7 +114,7 @@ evidence can suffice; an unexecuted proof of concept is not grounds for rejectio
    run**, not in your shell:
 
    ```text
-   /share file ./workshop-results/basic/GHSA-quadratic-session.md
+   /share file ./workshop-results/basic/GHSA-rh83-p44w-f327-session.md
    ```
 
    A session export includes
@@ -145,13 +145,13 @@ Reload discovery as above and choose either format:
 **Advisory URL:**
 
 ```text
-/pvr-triage-workshop https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic
+/pvr-triage-workshop https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security/advisories/GHSA-rh83-p44w-f327
 ```
 
 **Or repository and GHSA ID:**
 
 ```text
-/pvr-triage-workshop ghunitru1623s01/REPONAME GHSA-quadratic
+/pvr-triage-workshop ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 GHSA-rh83-p44w-f327
 ```
 
 Keep your own skill under its distinct name rather than overwriting it. Save the
@@ -180,13 +180,13 @@ answer in `workshop-results/basic/` as described above.
      **Advisory URL:**
 
      ```bash
-     /pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
+     /pvr-triage triage https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security/advisories/GHSA-rh83-p44w-f327 --source-repo ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 --data-dir ./workshop-results/advanced
      ```
 
      **Or repository and GHSA ID:**
 
      ```bash
-     /pvr-triage triage ghunitru1623s01/REPONAME GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
+     /pvr-triage triage ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 GHSA-rh83-p44w-f327 --source-repo ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 --data-dir ./workshop-results/advanced
      ```
 
    - **VS Code:** In a fresh chat, supply the repository-relative data directory.
@@ -195,13 +195,13 @@ answer in `workshop-results/basic/` as described above.
      **Advisory URL:**
 
      ```text
-     /pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
+     /pvr-triage triage https://github.com/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/security/advisories/GHSA-rh83-p44w-f327 --source-repo ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 --data-dir ./workshop-results/advanced
      ```
 
      **Or repository and GHSA ID:**
 
      ```text
-     /pvr-triage triage ghunitru1623s01/REPONAME GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
+     /pvr-triage triage ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 GHSA-rh83-p44w-f327 --source-repo ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026 --data-dir ./workshop-results/advanced
      ```
 
    The URL replaces the repository and GHSA arguments, not the output-directory
@@ -225,12 +225,12 @@ names. Your basic answer and advanced bundle are kept separately:
 workshop-results/
   .gitignore
   basic/
-    GHSA-quadratic.md
+    GHSA-rh83-p44w-f327.md
   advanced/
     ghunitru1623s01/
-      REPONAME/
+      ghuniverse01-cmark-gfm-universe2026/
         inbox.json
-        GHSA-quadratic/
+        GHSA-rh83-p44w-f327/
           triage.md
           assessment.json
           response.md
@@ -257,8 +257,8 @@ review. Do not ask Copilot to approve its own assessment.
 
 ## 5. Compare and discuss
 
-Compare `workshop-results/basic/GHSA-quadratic.md` with
-`workshop-results/advanced/ghunitru1623s01/REPONAME/GHSA-quadratic/triage.md`:
+Compare `workshop-results/basic/GHSA-rh83-p44w-f327.md` with
+`workshop-results/advanced/ghunitru1623s01/ghuniverse01-cmark-gfm-universe2026/GHSA-rh83-p44w-f327/triage.md`:
 
 - Did both examine the same affected revision and security scenario?
 - Did they separate code behavior from security impact and explain uncertainty?
