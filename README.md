@@ -180,13 +180,13 @@ answer in `workshop-results/basic/` as described above.
      **Advisory URL:**
 
      ```bash
-     copilot -i '/pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced'
+     /pvr-triage triage https://github.com/ghunitru1623s01/REPONAME/security/advisories/GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
      ```
 
      **Or repository and GHSA ID:**
 
      ```bash
-     copilot -i '/pvr-triage triage ghunitru1623s01/REPONAME GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced'
+     /pvr-triage triage ghunitru1623s01/REPONAME GHSA-quadratic --source-repo ghunitru1623s01/REPONAME --data-dir ./workshop-results/advanced
      ```
 
    - **VS Code:** In a fresh chat, supply the repository-relative data directory.
